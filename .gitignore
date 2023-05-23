@@ -12,3 +12,8 @@ tcellmatch.egg-info/
 tcellmatch.egg-info/*
 venv/
 tutorials/.ipynb_checkpoints/
+tutorials/saved_model
+tcell-env/bin
+tcell-env/include
+tcell-env/lib/python3.11/site-packages/*
+!tcell-env/lib/python3.11/site-packages/tcellmatch/*

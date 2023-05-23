@@ -1,0 +1,11 @@
+[TYPECHECK]
+# Disable errors for _____ not found in torch
+ignored-modules=_____
+
+[FORMAT]
+# Disable line too long
+max-line-length=200
+
+[MESSAGES CONTROL]
+# Disable "no docstring" errors
+disable=missing-docstring
