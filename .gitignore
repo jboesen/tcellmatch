@@ -20,4 +20,4 @@ tcell-env/lib/python3.11/site-packages/*
 vdj_v1_hs_aggregated_donor1_binarized_matrix.csv
 vdj_v1_hs_aggregated_donor2_binarized_matrix.csv
 vdj_v1_hs_aggregated_donor2_clonotypes.csv
-vdj_v1_hs_aggregated_donor2_binarized_matrix.csv
+vdj_v1_hs_aggregated_donor1_clonotypes.csv
