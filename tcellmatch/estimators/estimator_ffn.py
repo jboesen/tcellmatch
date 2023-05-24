@@ -1431,21 +1431,24 @@ class EstimatorFfn(EstimatorBase):
                 - any other string: This will be the new directory.
         :return:
         """
-        if fn is not None:
-            fn_settings = fn
-            fn_data = fn
-            fn_model = fn
+        # if fn is not None:
+        #     fn_settings = fn
+        #     fn_data = fn
+        #     fn_model = fn
         if not (fn_settings and fn_data and fn_model) and not fn:
             raise ValueError("Please supply either fn or all of fn_settings, fn_data and fn_model.")
-        # non-custom names
-        # Initialise model.
-        # TODO: this gets messy if fn_settings and fn_model are custom-defined
-        self.load_data(fn=f'{fn}/data')
-        self.load_model(
-            # fn_settings=fn_settings,
-            # fn_model=fn_model
-            fn=fn
-        )
+        if not fn_settings:
+            self.load_data(fn=f'{fn}/data')
+            self.load_model(
+                fn=fn
+            )
+        else:
+            self.load_data(fn=fn_data)
+            self.load_model(
+                fn_settings=fn_settings,
+                fn_model=fn_model
+            )
+
 
     def load_model(
             self,
@@ -1463,12 +1466,10 @@ class EstimatorFfn(EstimatorBase):
         if not fn_settings or not fn_model:
             self.load_model_settings(fn=f'{fn}/args')
             self.initialise_model_from_settings()
-            # self.load_model(fn=f'{fn}/model')
             self.model.load_state_dict(torch.load(f'{fn}/model'))  # Load the saved state dictionary
         else:
             self.load_model_settings(fn=fn_settings)
             self.initialise_model_from_settings()
-            # self.load_model(fn=f'{fn}/model')
             self.model.load_state_dict(torch.load(fn_model))  # Load the saved state dictionary
         
 
