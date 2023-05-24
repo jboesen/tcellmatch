@@ -42,7 +42,7 @@ class EstimatorFfn(EstimatorBase):
         EstimatorBase.__init__(self=self)
         self.criterion = None
         self.optimizer = None
-        # there are old params, may delete later
+        # ? these are old params, may delete later... use most of them
         self.model_hyperparam = None
         self.train_hyperparam = None
         self.wbce_weight = None
@@ -101,6 +101,7 @@ class EstimatorFfn(EstimatorBase):
         """
         self.wbce_weight = weight
 
+    # ! Still in tf
     def build_bilstm(
             self,
             topology: List[int],
@@ -161,6 +162,7 @@ class EstimatorFfn(EstimatorBase):
             dtype=dtype
         )
 
+    # ! Still in tf
     def build_bigru(
             self,
             topology: List[int],
@@ -221,6 +223,7 @@ class EstimatorFfn(EstimatorBase):
             dtype=dtype
         )
 
+    # ! Still in tf
     def _build_sequential(
             self,
             model: str,
@@ -447,7 +450,7 @@ class EstimatorFfn(EstimatorBase):
         # TODO: (maybe) this is hard-coded, but it's Adam anyway
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
 
-
+    # ! Still in tf
     def build_conv(
             self,
             activations: List[str],
@@ -554,6 +557,7 @@ class EstimatorFfn(EstimatorBase):
             label_smoothing=label_smoothing
         )
 
+    # ! Still in tf
     def build_inception(
             self,
             n_filters_1x1: List[int],
@@ -772,10 +776,6 @@ class EstimatorFfn(EstimatorBase):
 
     def train(
         self,
-        # x_train,
-        # y_train,
-        # covariates_train,
-        # clone_train,
         epochs=1000,
         batch_size=128,
         validation_split=0.1,
@@ -794,18 +794,19 @@ class EstimatorFfn(EstimatorBase):
                                           factor=lr_schedule_factor,
                                           patience=lr_schedule_patience,
                                           min_lr=lr_schedule_min_lr)
+
         # Early stopping initialization
         early_stopping_counter = 0
         # this is a placeholder value
         best_val_loss = np.inf
 
-        # Set up TensorBoard logging if needed
         writer = None
         if log_dir is not None:
             writer = SummaryWriter(log_dir=log_dir)
 
-
         if use_existing_eval_partition:
+            if not self.idx_train_val or not self.idx_train or not self.idx_val:
+                raise ValueError("ERROR: use_existing_eval_partition is True, but no eval partition exists")
             idx_val = np.array([self.idx_train_val.tolist().index(x)
                                 for x in self.idx_train_val if x in self.idx_val])
             idx_train = np.array([self.idx_train_val.tolist().index(x)
@@ -814,26 +815,18 @@ class EstimatorFfn(EstimatorBase):
             # Split training data into training and evaluation.
             # Perform this splitting based on clonotypes.
             clones = np.unique(self.clone_train)
+            # pick random subset of clones for validation
             clones_eval = np.random.choice(clones, size=int(len(clones) * validation_split), replace=False)
-
+            # use non-eval clones for train
             clones_train = np.setdiff1d(clones, clones_eval)
-
-            # Save partitions in terms of original indexing
+            # turn these clones into indices of the clones
             idx_val = np.argwhere(np.isin(self.clone_train, clones_eval)).flatten()
             idx_train = np.argwhere(np.isin(self.clone_train, clones_train)).flatten()
-            # clones = np.unique(self.clone_train)
-            # clones_eval = clones[np.random.choice(
-            #     a=np.arange(0, clones.shape[0]),
-            #     size=round(clones.shape[0] * validation_split),
-            #     replace=False
-            # )]
-            # clones_train = np.array([x for x in clones if x not in clones_eval])
-            # # Collect observations by clone partition:
-            # idx_val = np.where([x in clones_eval for x in self.clone_train])[0]
-            # idx_train = np.where([x in clones_train for x in self.clone_train])[0]
-            # Save partitions in terms of original indexing.
+            # turn these indices into indices of the train-val set (we do this b/c)
+            # there can now be multiple of one type of clone
             self.idx_train = self.idx_train_val[idx_train]
             self.idx_val = self.idx_train_val[idx_val]
+
             # Assert that split is exclusive and complete:
             assert len(set(clones_eval).intersection(set(clones_train))) == 0, \
                 "ERROR: train-test assignment was not exclusive on level of clones"
@@ -848,6 +841,7 @@ class EstimatorFfn(EstimatorBase):
 
         print("Number of observations in training data: %i" % len(idx_train)) 
 
+        # np is in float64, but model is in float32
         train_data = TensorDataset(
             torch.from_numpy(self.x_train[idx_train]).to(torch.float32),
             torch.from_numpy(self.covariates_train[idx_train]).to(torch.float32),
@@ -869,6 +863,7 @@ class EstimatorFfn(EstimatorBase):
                 x = x.to(self.device)
                 covariates = covariates.to(self.device)
                 y = y.to(self.device)
+
                 optimizer.zero_grad()
                 outputs = self.model(x, covariates)
                 loss = F.mse_loss(outputs, y)

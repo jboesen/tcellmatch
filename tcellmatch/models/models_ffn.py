@@ -3,7 +3,6 @@
 # pylint: disable=C0301
 # pylint: disable=C0114
 # pylint: disable=C0103
-import tensorflow as tf
 from typing import List, Union
 
 from tcellmatch.models.layers.layer_aa_embedding import LayerAaEmbedding
@@ -12,6 +11,7 @@ from tcellmatch.models.layers.layer_conv import LayerConv
 import torch
 import torch.nn as nn
 
+# !! Still uses tf
 class ModelBiRnn:
 
     forward_pass: list
@@ -235,11 +235,10 @@ class ModelSa(nn.Module):
             depth_final_dense: int = 1,
             out_activation: str = "linear",
             dropout: float = 0.0,
-            loss = None
     ):
         """ Self-attention-based feed-forward network.
 
-        Build the feed forward network as a tf.keras.Model object.
+        Build the feed forward network as a nn.Module object.
 
         :param dropout: drop out rate for lstm.
         :param attention_size: hidden size for attention, could be divided by attention_heads.
@@ -310,22 +309,14 @@ class ModelSa(nn.Module):
                 )
             )
 
+        # Linear Layers
         for i in range(self.depth_final_dense):
-            # print(f'Linear {i} in: ', input_tcr.shape[1], 'out: ', self.labels_dim)
             input_shape = input_tcr.shape[-1] * input_tcr.shape[-2] + input_covar_shape[-1]
-            if i == 0:
-                self.linear_layers.append(torch.nn.Linear(
-                    in_features=input_shape,
-                    out_features=self.labels_dim,
-                    bias=True
-                ))
-            else:
-                self.linear_layers.append(torch.nn.Linear(
-                    # in_features=input_tcr.shape[1],
-                    in_features=self.labels_dim,
-                    out_features=self.labels_dim,
-                    bias=True
-                ))
+            self.linear_layers.append(torch.nn.Linear(
+                in_features=input_shape if i == 0 else self.labels_dim,
+                out_features=self.labels_dim,
+                bias=True
+            ))
             if i < self.depth_final_dense - 1:
                 self.linear_layers.append(torch.nn.ReLU())
             else:
@@ -337,15 +328,16 @@ class ModelSa(nn.Module):
         for layer in self.embed_attention_layers:
             x = layer(x)
         x = x.view(-1, x.size(1) * x.size(2))
+
         # Optional concatenation of non-sequence covariates.
         if input_covar.shape[-1] > 0:
             x = torch.cat([x, input_covar], axis=1)
+
         for layer in self.linear_layers:
-            # if hasattr(layer, 'weight'):
-            #     x = x.to(dtype=layer.weight.dtype)
             x = layer(x)
         return x
 
+# !! Still uses tf
 class ModelConv:
 
     def __init__(
@@ -489,7 +481,7 @@ class ModelConv:
             name='model_conv'
         )
 
-
+# !! Still uses tf
 class ModelLinear:
 
     def __init__(
@@ -564,7 +556,7 @@ class ModelLinear:
             name='model_linear'
         )
 
-
+# !! Still uses tf
 class ModelNoseq:
 
     forward_pass: List[tf.keras.layers.Dense]

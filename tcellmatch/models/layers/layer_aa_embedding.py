@@ -31,16 +31,11 @@ class LayerAaEmbedding(nn.Module):
         if shape_embedding < 0:
             raise ValueError("aa_embedding_dim has to be >0")
         self.dropout = dropout
-        # self.input_shapes = input_shape
         self.sublayer_conv2d = None
         self.shape_embedding = shape_embedding if shape_embedding != 0 else input_shape[-1]
-        # self.shape_embedding = shape_embedding
-        # !! This is sketch
         self.sublayer_conv2d = torch.nn.Conv1d(
             in_channels=input_shape[-2],
             out_channels=input_shape[-2],
-            # in_channels=40,
-            # out_channels=40,
             kernel_size=1,
             stride=1,
             padding=0,

@@ -26,12 +26,9 @@ class LayerMultiheadSelfAttention(nn.Module):
         self.q_embedding = nn.Linear(input_shape[-1], self.total_width_embedding, bias=False)
         self.k_embedding = nn.Linear(input_shape[-1], self.total_width_embedding, bias=False)
         self.v_embedding = nn.Linear(input_shape[-1], self.total_width_embedding, bias=False)
-        # self.q_embedding = nn.Linear(self.total_width_embedding, self.total_width_embedding, bias=False)
-        # self.k_embedding = nn.Linear(self.total_width_embedding, self.total_width_embedding, bias=False)
-        # self.v_embedding = nn.Linear(self.total_width_embedding, self.total_width_embedding, bias=False)
 
         # Final dense layer
-        self.final_dense = nn.Linear(self.total_width_embedding, input_shape[-1])
+        self.final_linear = nn.Linear(self.total_width_embedding, input_shape[-1])
 
         if self.residual_connection:
             self.layer_norm = nn.LayerNorm(input_shape[-1], eps=1e-6)
@@ -55,10 +52,10 @@ class LayerMultiheadSelfAttention(nn.Module):
 
         # Calculate attention
         qk = torch.matmul(q, k.permute(0, 1, 3, 2))  # [batch_size, n_heads, seq_len, seq_len]
-        qk = F.softmax(qk, dim=-1)  # apply softmax
+        qk = F.softmax(qk, dim=-1)
         # TODO: make this only if training
         if self.training:
-            qk = self.qk_dropout(qk)  # apply dropout
+            qk = self.qk_dropout(qk)
 
 
         # Compute the weighted value (context)
@@ -67,12 +64,9 @@ class LayerMultiheadSelfAttention(nn.Module):
         qkv = qkv.permute(0, 2, 1, 3).contiguous()  # [batch_size, seq_len, n_heads, width_embedding]
         output = qkv.view(qkv.size(0), -1, self.total_width_embedding)  # [batch_size, seq_len, total_width_embedding]
 
-        # Final linear layer
-        output = self.final_dense(output)
+        output = self.final_linear(output)
 
-        # Apply residual connection and layer normalization
         if self.residual_connection:
             output = self.layer_norm(inputs + output)
-        
 
         return output
