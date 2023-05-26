@@ -8,6 +8,7 @@ from typing import List, Union
 from tcellmatch.models.layers.layer_aa_embedding import LayerAaEmbedding
 from tcellmatch.models.layers.layer_attention import LayerMultiheadSelfAttention
 from tcellmatch.models.layers.layer_conv import LayerConv
+from tcellmatch.models.layers.layer_bilstm import BiLSTM
 import torch
 import torch.nn as nn
 
@@ -78,124 +79,59 @@ class ModelBiRnn:
         self.split = split
         self.run_eagerly = False
         self.x_len = input_shapes[4]
+        self.embed = None
+        self.bi_layers = nn.ModuleList()
+        self.bi_peptide_layers = nn.ModuleList()
+        self.linear_layers = nn.ModuleList()
 
-        input_tcr = tf.keras.layers.Input(
-            shape=(input_shapes[0], input_shapes[1], input_shapes[2]),
-            name='input_tcr'
-        )
-        input_covar = tf.keras.layers.Input(
-            shape=(input_shapes[3]),
-            name='input_covar'
-        )
+        # input_tcr = tf.keras.layers.Input(
+        #     shape=(input_shapes[0], input_shapes[1], input_shapes[2]),
+        #     name='input_tcr'
+        # )
 
-        # Preprocessing:
-        x = input_tcr
-        x = tf.squeeze(x, axis=[1])  # squeeze out chain
-        x = 2 * (x - 0.5)
+        # input_covar = tf.keras.layers.Input(
+        #     shape=(input_shapes[3]),
+        #     name='input_covar'
+        # )
+
+        input_dim = (input_shapes[0], input_shapes[1], input_shapes[2])
+        input_covar_shape = (input_shapes[3])
+
         # Optional amino acid embedding:
         if aa_embedding_dim is not None:
-            x = LayerAaEmbedding(
-                shape_embedding=self.aa_embedding_dim,
-                squeeze_2D_sequence=True
-            )(x)
+            self.embed = LayerAaEmbedding(
+                    shape_embedding=self.aa_embedding_dim,
+                    input_shape=input_dim
+                )
         # Split input into tcr and peptide
-        if self.split:
-            pep = x[:, self.x_len:, :]
-            x = x[:, :self.x_len, :]  # TCR sequence from here on.
+        # if self.split:
+        #     pep = x[:, self.x_len:, :]
+        #     x = x[:, :self.x_len, :]  # TCR sequence from here on.
         for i, w in enumerate(self.topology):
             if self.model.lower() == "bilstm":
-                x = tf.keras.layers.Bidirectional(
-                    layer=tf.keras.layers.LSTM(
-                        units=w,
-                        return_sequences=True if i < len(self.topology) - 1 else False,
-                        dropout=self.dropout,
-                        activation="tanh",
-                        use_bias=True,
-                        recurrent_dropout=0,
-                        recurrent_activation='sigmoid',
-                        recurrent_initializer='orthogonal',
-                        kernel_initializer='glorot_uniform',
-                        bias_initializer='zeros',
-                        kernel_regularizer=None,
-                        recurrent_regularizer=None,
-                        bias_regularizer=None,
-                        activity_regularizer=None,
-                        unroll=False,
-                        unit_forget_bias=True
-                    ),
-                    merge_mode='concat'
-                )(x)
+                self.bi_layers.append(BiLSTM(input_dim, w, dropout))
                 if self.split:
-                    pep = tf.keras.layers.Bidirectional(
-                        layer=tf.keras.layers.LSTM(
-                            units=w,
-                            return_sequences=True if i < len(self.topology) - 1 else False,
-                            dropout=self.dropout,
-                            activation="tanh",
-                            use_bias=True,
-                            recurrent_dropout=0,
-                            recurrent_activation='sigmoid',
-                            recurrent_initializer='orthogonal',
-                            kernel_initializer='glorot_uniform',
-                            bias_initializer='zeros',
-                            kernel_regularizer=None,
-                            recurrent_regularizer=None,
-                            bias_regularizer=None,
-                            activity_regularizer=None,
-                            unroll=False,
-                            unit_forget_bias=True
-                        ),
-                        merge_mode='concat'
-                    )(pep)
+                    self.bi_peptide_layers.append(BiLSTM(input_dim, w, dropout))
             elif self.model.lower() == "bigru":
-                x = tf.keras.layers.Bidirectional(
-                    layer=tf.keras.layers.GRU(
-                        units=w,
-                        return_sequences=True if i < len(self.topology) - 1 else False,
-                        dropout=self.dropout,
-                        recurrent_dropout=0,
-                        activation="tanh",
-                        recurrent_activation='sigmoid',
-                        use_bias=True,
-                        kernel_initializer='glorot_uniform',
-                        recurrent_initializer='orthogonal',
-                        bias_initializer='zeros',
-                        kernel_regularizer=None,
-                        recurrent_regularizer=None,
-                        bias_regularizer=None,
-                        activity_regularizer=None,
-                        unroll=False,
-                        reset_after=True
-                    ),
-                    merge_mode='concat'
-                )(x)
+                self.bi_layers.append(
+                    nn.GRU(
+                        input_dim,
+                        w,
+                        num_layers=1,
+                        dropout=dropout,
+                        bidirectional=True
+                    )
+                )
                 if self.split:
-                    pep = tf.keras.layers.Bidirectional(
-                        layer=tf.keras.layers.GRU(
-                            units=w,
-                            return_sequences=True if i < len(self.topology) - 1 else False,
-                            dropout=self.dropout,
-                            recurrent_dropout=0,
-                            activation="tanh",
-                            recurrent_activation='sigmoid',
-                            use_bias=True,
-                            kernel_initializer='glorot_uniform',
-                            recurrent_initializer='orthogonal',
-                            bias_initializer='zeros',
-                            kernel_regularizer=None,
-                            recurrent_regularizer=None,
-                            bias_regularizer=None,
-                            activity_regularizer=None,
-                            unroll=False,
-                            reset_after=True
-                        ),
-                        merge_mode='concat'
-                    )(pep)
-        if self.split:
-            x = tf.concat([x, pep], axis=1)
-        # Optional concatenation of non-sequence covariates.
-        if input_covar.shape[1] > 0:
-            x = tf.concat([x, input_covar], axis=1)
+                    self.bi_peptide_layers.append(
+                        nn.GRU(
+                            input_dim,
+                            w,
+                            num_layers=1,
+                            dropout=dropout,
+                            bidirectional=True
+                        )
+                    )
         # Final dense layers.from
         for i in range(self.depth_final_dense):
             x = tf.keras.layers.Dense(
@@ -208,13 +144,56 @@ class ModelBiRnn:
                 bias_regularizer=None,
                 activity_regularizer=None
             )(x)
-        output = x
+        for i in range(self.depth_final_dense):
+            input_shape = input_tcr.shape[-1] * input_tcr.shape[-2] + input_covar_shape[-1]
+            self.linear_layers.append(torch.nn.Linear(
+                in_features=input_shape if i == 0 else self.labels_dim,
+                out_features=self.labels_dim,
+                bias=True
+            ))
+            if i < self.depth_final_dense - 1:
+                self.linear_layers.append(torch.nn.ReLU())
+            else:
+                self.linear_layers.append(torch.nn.Softmax(dim=1))
 
-        self.training_model = tf.keras.models.Model(
-            inputs=[input_tcr, input_covar],
-            outputs=output,
-            name='model_birnn'
-        )
+        for i in range(self.depth_final_dense):
+            input_shape = input_tcr.shape[-1] * input_tcr.shape[-2] + input_covar_shape[-1]
+            self.linear_layers.append(torch.nn.Linear(
+                in_features=input_shape if i == 0 else self.labels_dim,
+                out_features=self.labels_dim,
+                bias=True
+            ))
+            if i < self.depth_final_dense - 1:
+                self.linear_layers.append(torch.nn.ReLU())
+            else:
+                self.linear_layers.append(torch.nn.Softmax(dim=1))
+
+        def forward(self, x, covar):
+            x = torch.squeeze(x, dim=1)
+            x = 2 * (x - 0.5)
+
+            for layer in self.embedding_layers:
+                x = layer(x)
+
+            if self.split:
+                pep = x[:, self.x_len:, :]
+                x = x[:, :self.x_len, :]  # TCR sequence from here on.
+
+            for layer in self.bi_layers:
+                x = layer(x)
+            for layer in self.bi_peptide_layers:
+                pep = layer(pep)
+
+            if self.split:
+                x = torch.cat([x, pep], axis=1)
+            
+            # Optional concatenation of non-sequence covariates.
+            if covar.shape[1] > 0:
+                x = torch.cat([x, covar], axis=1)
+            
+            for layer in self.linear_layers:
+                x = layer(x)
+            return x
 
 
 class ModelSa(nn.Module):
@@ -291,7 +270,6 @@ class ModelSa(nn.Module):
             self.embed_attention_layers.append(
                 LayerAaEmbedding(
                     shape_embedding=self.aa_embedding_dim,
-                    squeeze_2D_sequence=True,
                     input_shape=input_tcr.shape
                 )
             )
