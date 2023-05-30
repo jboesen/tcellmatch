@@ -11,9 +11,9 @@ from tcellmatch.models.layers.layer_conv import LayerConv
 from tcellmatch.models.layers.layer_bilstm import BiLSTM
 import torch
 import torch.nn as nn
+import tensorflow as tf
 
-# !! Still uses tf
-class ModelBiRnn:
+class ModelBiRnn(nn.Module):
 
     forward_pass: list
     forward_pass_pep: list
@@ -54,6 +54,7 @@ class ModelBiRnn:
             - "sigmoid" for binary binding events with multiple events per cell
             - "softmax" for binary binding events with one event per cell
         """
+        super(ModelBiRnn, self).__init__()
         self.args = {
             "labels_dim": labels_dim,
             "input_shapes": input_shapes,
@@ -84,18 +85,8 @@ class ModelBiRnn:
         self.bi_peptide_layers = nn.ModuleList()
         self.linear_layers = nn.ModuleList()
 
-        # input_tcr = tf.keras.layers.Input(
-        #     shape=(input_shapes[0], input_shapes[1], input_shapes[2]),
-        #     name='input_tcr'
-        # )
-
-        # input_covar = tf.keras.layers.Input(
-        #     shape=(input_shapes[3]),
-        #     name='input_covar'
-        # )
-
         input_dim = (input_shapes[0], input_shapes[1], input_shapes[2])
-        input_covar_shape = (input_shapes[3])
+        input_covar_shape = (input_shapes[3],)
 
         # Optional amino acid embedding:
         if aa_embedding_dim is not None:
@@ -104,14 +95,18 @@ class ModelBiRnn:
                     input_shape=input_dim
                 )
         # Split input into tcr and peptide
-        # if self.split:
-        #     pep = x[:, self.x_len:, :]
-        #     x = x[:, :self.x_len, :]  # TCR sequence from here on.
         for i, w in enumerate(self.topology):
             if self.model.lower() == "bilstm":
-                self.bi_layers.append(BiLSTM(input_dim, w, dropout))
+                if i == 0:
+                    self.bi_layers.append(BiLSTM(input_dim[-1], w, dropout, return_sequences=True))
+                else:
+                    self.bi_layers.append(BiLSTM(2 * w, w, dropout, return_sequences=False))
                 if self.split:
-                    self.bi_peptide_layers.append(BiLSTM(input_dim, w, dropout))
+                    if i == 0:
+                        self.bi_peptide_layers.append(BiLSTM(input_dim[-1], w, dropout, return_sequences=True))
+                    else:
+                        self.bi_peptide_layers.append(BiLSTM(2 * w, w, dropout, return_sequences=False))
+            # !! BiGRU layers not implemented
             elif self.model.lower() == "bigru":
                 self.bi_layers.append(
                     nn.GRU(
@@ -133,21 +128,16 @@ class ModelBiRnn:
                         )
                     )
         # Final dense layers.from
+        # !! Not checked for BiGRU
         for i in range(self.depth_final_dense):
-            x = tf.keras.layers.Dense(
-                units=self.labels_dim,
-                activation="relu" if i < self.depth_final_dense - 1 else self.out_activation,
-                use_bias=True,
-                kernel_initializer='glorot_uniform',
-                bias_initializer='zeros',
-                kernel_regularizer=None,
-                bias_regularizer=None,
-                activity_regularizer=None
-            )(x)
-        for i in range(self.depth_final_dense):
-            input_shape = input_tcr.shape[-1] * input_tcr.shape[-2] + input_covar_shape[-1]
+            if split:
+                # 2 peptide x 2 for bidirectionality
+                in_shape = self.bi_layers[-1].lstm.hidden_size * 4 + input_covar_shape[-1]
+            else:
+                in_shape = self.bi_layers[-1].lstm.hidden_size * 2 + input_covar_shape[-1]
+            # elif self.model.lower() == "bigru":
             self.linear_layers.append(torch.nn.Linear(
-                in_features=input_shape if i == 0 else self.labels_dim,
+                in_features=in_shape if i == 0 else self.labels_dim,
                 out_features=self.labels_dim,
                 bias=True
             ))
@@ -156,44 +146,38 @@ class ModelBiRnn:
             else:
                 self.linear_layers.append(torch.nn.Softmax(dim=1))
 
-        for i in range(self.depth_final_dense):
-            input_shape = input_tcr.shape[-1] * input_tcr.shape[-2] + input_covar_shape[-1]
-            self.linear_layers.append(torch.nn.Linear(
-                in_features=input_shape if i == 0 else self.labels_dim,
-                out_features=self.labels_dim,
-                bias=True
-            ))
-            if i < self.depth_final_dense - 1:
-                self.linear_layers.append(torch.nn.ReLU())
-            else:
-                self.linear_layers.append(torch.nn.Softmax(dim=1))
+    def forward(
+        self,
+        x : torch.Tensor,
+        covar: torch.Tensor,
+        save_embeddings: bool = False,
+        fn: str = 'bilstm_embeddings'
+        ):
+        x = torch.squeeze(x, dim=1)
+        x = 2 * (x - 0.5)
 
-        def forward(self, x, covar):
-            x = torch.squeeze(x, dim=1)
-            x = 2 * (x - 0.5)
+        x = self.embed(x)
 
-            for layer in self.embedding_layers:
-                x = layer(x)
+        if self.split:
+            pep = x[:, self.x_len:, :]
+            x = x[:, :self.x_len, :]  # TCR sequence from here on.
+        for layer in self.bi_layers:
+            x = layer(x)
 
-            if self.split:
-                pep = x[:, self.x_len:, :]
-                x = x[:, :self.x_len, :]  # TCR sequence from here on.
+        for layer in self.bi_peptide_layers:
+            pep = layer(pep)
 
-            for layer in self.bi_layers:
-                x = layer(x)
-            for layer in self.bi_peptide_layers:
-                pep = layer(pep)
-
-            if self.split:
-                x = torch.cat([x, pep], axis=1)
-            
-            # Optional concatenation of non-sequence covariates.
-            if covar.shape[1] > 0:
-                x = torch.cat([x, covar], axis=1)
-            
-            for layer in self.linear_layers:
-                x = layer(x)
-            return x
+        if self.split:
+            x = torch.cat([x, pep], axis=1)
+        
+        # Optional concatenation of non-sequence covariates.
+        if covar.shape[1] > 0:
+            x = torch.cat([x, covar], axis=1)
+        if save_embeddings:
+            torch.save(x, f'{fn}.pt')  
+        for layer in self.linear_layers:
+            x = layer(x)
+        return x
 
 
 class ModelSa(nn.Module):

@@ -21,3 +21,8 @@ vdj_v1_hs_aggregated_donor1_binarized_matrix.csv
 vdj_v1_hs_aggregated_donor2_binarized_matrix.csv
 vdj_v1_hs_aggregated_donor2_clonotypes.csv
 vdj_v1_hs_aggregated_donor1_clonotypes.csv
+tutorials/ffn_data.npz
+tutorials/loaded_dataset.pkl
+tutorials/x_train.npy
+tutorials/ffn_resampled.npz
+tutorials/SAVED_IDX_idx_train_val.npy
