@@ -26,3 +26,17 @@ tutorials/loaded_dataset.pkl
 tutorials/x_train.npy
 tutorials/ffn_resampled.npz
 tutorials/SAVED_IDX_idx_train_val.npy
+saved_model
+tutorials/SAVED_IDX_idx_test.npy
+tutorials/SAVED_IDX_idx_train.npy
+tutorials/SAVED_IDX_idx_val.npy
+tutorials/x_train.npy
+tutorials/y_train.npy
+tutorials/all_clono_labels.pt
+tutorials/all_unique_clono.pt
+tutorials/bilstm_embeddings.pt
+tutorials/embeddings_labels_df.csv
+tutorials/ffn_data.csv
+tutorials/x_train.npy
+tutorials/y_train.npy
+TRAINING_RUN_1pm

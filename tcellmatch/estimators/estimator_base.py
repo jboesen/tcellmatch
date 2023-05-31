@@ -1190,6 +1190,7 @@ class EstimatorBase:
             rename_covariates_for_patsy=rename_covariates_for_patsy,
             table=covariates_table
         )
+        # ? What
         y = np.concatenate([x[2] for x in inputs], axis=0)
         if add_non_binder_for_softmax:
             non_binder_category = np.expand_dims(

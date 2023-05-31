@@ -114,7 +114,8 @@ class EstimatorFfn(EstimatorBase):
             loss: str = "bce",
             label_smoothing: float = 0,
             optimize_for_gpu: bool = True,
-            dtype: str = "float32"
+            dtype: str = "float32",
+            use_covariates: bool = True
     ):
         """ Build a BiLSTM-based feed-forward model to use in the estimator.
 
@@ -158,7 +159,8 @@ class EstimatorFfn(EstimatorBase):
             loss=loss,
             label_smoothing=label_smoothing,
             optimize_for_gpu=optimize_for_gpu,
-            dtype=dtype
+            dtype=dtype,
+            use_covariates=use_covariates
         )
 
     # ! Still in tf
@@ -236,7 +238,8 @@ class EstimatorFfn(EstimatorBase):
             loss: str,
             label_smoothing: float,
             optimize_for_gpu: bool,
-            dtype: str = "float32"
+            dtype: str = "float32",
+            use_covariates: bool = True
     ):
         """ Build a BiLSTM-based feed-forward model to use in the estimator.
 
@@ -289,7 +292,7 @@ class EstimatorFfn(EstimatorBase):
                 self.x_train.shape[1],
                 self.x_train.shape[2],
                 self.x_train.shape[3],
-                self.covariates_train.shape[1],
+                self.covariates_train.shape[1] if use_covariates else 0,
                 self.tcr_len
             ),
             model=model.lower(),
@@ -850,7 +853,7 @@ class EstimatorFfn(EstimatorBase):
             torch.from_numpy(self.y_train[idx_val]).to(torch.float32)
             )
         train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True)
-        self.train_loader = train_loader
+        # self.train_loader = train_loader
         val_loader = DataLoader(dataset=val_data, batch_size=validation_batch_size, shuffle=False)
         # Training loop
         for epoch in range(epochs):
@@ -863,7 +866,8 @@ class EstimatorFfn(EstimatorBase):
                 y = y.to(self.device)
 
                 optimizer.zero_grad()
-                outputs = self.model(x, covariates)
+                # outputs = self.model(x, covariates)
+                outputs = self.model(x)
                 loss = F.mse_loss(outputs, y)
                 loss.backward()
                 optimizer.step()
@@ -1167,7 +1171,7 @@ class EstimatorFfn(EstimatorBase):
             labels_unique=labels_unique
         )
 
-    def predict(self, batch_size: int = 128):
+    def predict(self, batch_size: int = 128, save_embeddings: bool = False):
         """ Predict labels on test data.
 
         :param batch_size: Batch size for evaluation.
@@ -1178,7 +1182,7 @@ class EstimatorFfn(EstimatorBase):
         # Create a DataLoader for the test data
         test_data = TensorDataset(torch.from_numpy(self.x_test), torch.from_numpy(self.covariates_test))
         test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
-
+        self.test_loader = test_loader
         all_outputs = []
 
         with torch.no_grad():  # Disable gradient computation
@@ -1784,7 +1788,7 @@ class EstimatorFfn(EstimatorBase):
                 self.nc_test = np.asarray(scipy.sparse.load_npz(file=fn + "_nc_test.npz").todense())
             else:
                 self.nc_test = None
-            self.clone_test = np.load(file=fn + "_clone_test.npy")
+            self.clone_test = np.load(file=fn + "_clone_test.npy", allow_pickle=True)
 
         self.load_idx(fn=fn)
 

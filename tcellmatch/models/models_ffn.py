@@ -87,7 +87,6 @@ class ModelBiRnn(nn.Module):
 
         input_dim = (input_shapes[0], input_shapes[1], input_shapes[2])
         input_covar_shape = (input_shapes[3],)
-
         # Optional amino acid embedding:
         if aa_embedding_dim is not None:
             self.embed = LayerAaEmbedding(
@@ -128,13 +127,17 @@ class ModelBiRnn(nn.Module):
                         )
                     )
         # Final dense layers.from
-        # !! Not checked for BiGRU
+        # !! BiGRU not implemented
         for i in range(self.depth_final_dense):
+            # print(self.bi_layers[-1].lstm.hidden_size * 2 + input_covar_shape[-1])
+            # TODO: not sure why it always requires + 2 ...
             if split:
                 # 2 peptide x 2 for bidirectionality
                 in_shape = self.bi_layers[-1].lstm.hidden_size * 4 + input_covar_shape[-1]
+                # in_shape = self.bi_layers[-1].lstm.hidden_size * 4 + 2
             else:
                 in_shape = self.bi_layers[-1].lstm.hidden_size * 2 + input_covar_shape[-1]
+                # in_shape = self.bi_layers[-1].lstm.hidden_size * 2 + 2
             # elif self.model.lower() == "bigru":
             self.linear_layers.append(torch.nn.Linear(
                 in_features=in_shape if i == 0 else self.labels_dim,
@@ -149,10 +152,13 @@ class ModelBiRnn(nn.Module):
     def forward(
         self,
         x : torch.Tensor,
-        covar: torch.Tensor,
+        covar: torch.Tensor = None,
         save_embeddings: bool = False,
         fn: str = 'bilstm_embeddings'
         ):
+        # do this in function to avoid always passing the same object
+        if covar is not None:
+            covar = torch.Tensor([[]])
         x = torch.squeeze(x, dim=1)
         x = 2 * (x - 0.5)
 
@@ -171,12 +177,15 @@ class ModelBiRnn(nn.Module):
             x = torch.cat([x, pep], axis=1)
         
         # Optional concatenation of non-sequence covariates.
-        if covar.shape[1] > 0:
+        # if covar.shape[1] > 0:
+        if covar is not None and covar.shape[1] > 0:
             x = torch.cat([x, covar], axis=1)
         if save_embeddings:
             torch.save(x, f'{fn}.pt')  
         for layer in self.linear_layers:
+            # print(x.shape)
             x = layer(x)
+            # print(x.shape)
         return x
 
 
@@ -273,7 +282,8 @@ class ModelSa(nn.Module):
 
         # Linear Layers
         for i in range(self.depth_final_dense):
-            input_shape = input_tcr.shape[-1] * input_tcr.shape[-2] + input_covar_shape[-1]
+            # input_shape = input_tcr.shape[-1] * input_tcr.shape[-2] + input_covar_shape[-1]
+            input_shape = input_tcr.shape[-1] * input_tcr.shape[-2] + 2
             self.linear_layers.append(torch.nn.Linear(
                 in_features=input_shape if i == 0 else self.labels_dim,
                 out_features=self.labels_dim,
