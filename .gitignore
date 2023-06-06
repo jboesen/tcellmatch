@@ -40,3 +40,11 @@ tutorials/ffn_data.csv
 tutorials/x_train.npy
 tutorials/y_train.npy
 TRAINING_RUN_1pm
+x_train.npy
+y_train.npy
+ffn_data.npz
+ffn_resampled.npz
+SAVED_IDX_idx_test.npy
+SAVED_IDX_idx_val.npy
+SAVED_IDX_idx_train.npy
+SAVED_IDX_idx_train_val.npy

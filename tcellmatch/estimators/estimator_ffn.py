@@ -24,7 +24,7 @@ from tcellmatch.models.model_inception import ModelInception
 from tcellmatch.estimators.additional_metrics import pr_global, pr_label, auc_global, auc_label, \
     deviation_global, deviation_label
 from tcellmatch.estimators.estimator_base import EstimatorBase
-from tcellmatch.estimators.losses import WeightedBinaryCrossentropy
+from tcellmatch.estimators.losses import WeightedBinaryCrossentropy, MMD
 from tcellmatch.estimators.metrics import custom_r2, custom_logr2
 
 
@@ -336,6 +336,8 @@ class EstimatorFfn(EstimatorBase):
             return nn.CrossEntropyLoss(weight=torch.full([1], label_smoothing))
 
         # no label smoothing
+        if loss.lower() == "mmd":
+            return MMD
         if loss == "categorical_crossentropy" or loss == "cce":
             return nn.CrossEntropyLoss()
         elif loss == "binary_crossentropy" or loss == "bce":
@@ -868,7 +870,8 @@ class EstimatorFfn(EstimatorBase):
                 optimizer.zero_grad()
                 # outputs = self.model(x, covariates)
                 outputs = self.model(x)
-                loss = F.mse_loss(outputs, y)
+                # loss = F.mse_loss(outputs, y)
+                loss = self.criterion(outputs, y)
                 loss.backward()
                 optimizer.step()
                 running_loss += loss.item() * x.size(0)
