@@ -89,6 +89,8 @@ class EstimatorFfn(EstimatorBase):
             return "exponential"
         elif loss.lower() in ["poisson", "pois"]:
             return "exponential"
+        elif loss.lower() == 'mmd':
+            return "softmax"
         else:
             raise ValueError(f"Loss {loss} not recognized.")
 
