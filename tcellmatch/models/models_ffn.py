@@ -167,8 +167,6 @@ class ModelBiRnn(nn.Module):
             x = x[:, :self.x_len, :]  # TCR sequence from here on.
         for layer in self.bi_layers:
             x = layer(x)
-        print(type(self.bi_layers))
-        print(type(x))
 
 
         for layer in self.bi_peptide_layers:
