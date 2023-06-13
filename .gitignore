@@ -37,6 +37,7 @@ tutorials/all_unique_clono.pt
 tutorials/bilstm_embeddings.pt
 tutorials/embeddings_labels_df.csv
 tutorials/ffn_data.csv
+tutorials/bilstm debugging.ipynb
 tutorials/x_train.npy
 tutorials/y_train.npy
 TRAINING_RUN_1pm

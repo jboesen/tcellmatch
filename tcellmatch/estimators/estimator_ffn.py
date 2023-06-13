@@ -117,7 +117,7 @@ class EstimatorFfn(EstimatorBase):
             label_smoothing: float = 0,
             optimize_for_gpu: bool = True,
             dtype: str = "float32",
-            use_covariates: bool = True
+            use_covariates: bool = True,
     ):
         """ Build a BiLSTM-based feed-forward model to use in the estimator.
 
@@ -162,7 +162,7 @@ class EstimatorFfn(EstimatorBase):
             label_smoothing=label_smoothing,
             optimize_for_gpu=optimize_for_gpu,
             dtype=dtype,
-            use_covariates=use_covariates
+            use_covariates=use_covariates,
         )
 
     # ! Still in tf
@@ -241,7 +241,7 @@ class EstimatorFfn(EstimatorBase):
             label_smoothing: float,
             optimize_for_gpu: bool,
             dtype: str = "float32",
-            use_covariates: bool = True
+            use_covariates: bool = True,
     ):
         """ Build a BiLSTM-based feed-forward model to use in the estimator.
 
@@ -305,7 +305,7 @@ class EstimatorFfn(EstimatorBase):
             aa_embedding_dim=aa_embedding_dim,
             depth_final_dense=depth_final_dense,
             out_activation=self._out_activation(loss=loss),
-            dropout=dropout
+            dropout=dropout,
         )
 
         # Define loss and optimizer
@@ -804,6 +804,8 @@ class EstimatorFfn(EstimatorBase):
         # this is a placeholder value
         best_val_loss = np.inf
 
+        use_covariates = self.model.has_covariates if hasattr(self.model, 'has_covariates') else True
+
         writer = None
         if log_dir is not None:
             writer = SummaryWriter(log_dir=log_dir)
@@ -846,16 +848,29 @@ class EstimatorFfn(EstimatorBase):
         print("Number of observations in training data: %i" % len(idx_train)) 
 
         # np is in float64, but model is in float32
-        train_data = TensorDataset(
-            torch.from_numpy(self.x_train[idx_train]).to(torch.float32),
-            torch.from_numpy(self.covariates_train[idx_train]).to(torch.float32),
-            torch.from_numpy(self.y_train[idx_train]).to(torch.float32)
-            )
-        val_data = TensorDataset(
-            torch.from_numpy(self.x_train[idx_val]).to(torch.float32),
-            torch.from_numpy(self.covariates_train[idx_val]).to(torch.float32),
-            torch.from_numpy(self.y_train[idx_val]).to(torch.float32)
-            )
+        if use_covariates:
+            train_data = TensorDataset(
+                torch.from_numpy(self.x_train[idx_train]).to(torch.float32),
+                torch.from_numpy(self.covariates_train[idx_train]).to(torch.float32),
+                torch.from_numpy(self.y_train[idx_train]).to(torch.float32)
+                )
+            val_data = TensorDataset(
+                torch.from_numpy(self.x_train[idx_val]).to(torch.float32),
+                torch.from_numpy(self.covariates_train[idx_val]).to(torch.float32),
+                torch.from_numpy(self.y_train[idx_val]).to(torch.float32)
+                )
+        else:
+            train_data = TensorDataset(
+                torch.from_numpy(self.x_train[idx_train]).to(torch.float32),
+                torch.from_numpy(self.covariates_train[idx_train]).to(torch.float32),
+                torch.from_numpy(self.y_train[idx_train]).to(torch.float32)
+                )
+            val_data = TensorDataset(
+                torch.from_numpy(self.x_train[idx_val]).to(torch.float32),
+                torch.from_numpy(self.covariates_train[idx_val]).to(torch.float32),
+                torch.from_numpy(self.y_train[idx_val]).to(torch.float32)
+                )
+
         train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True)
         # self.train_loader = train_loader
         val_loader = DataLoader(dataset=val_data, batch_size=validation_batch_size, shuffle=False)
@@ -865,13 +880,11 @@ class EstimatorFfn(EstimatorBase):
             self.model.train()
             running_loss = 0.0
             for x, covariates, y in train_loader:
-                x = x.to(self.device)
-                covariates = covariates.to(self.device)
-                y = y.to(self.device)
+                x, covariates, y = x.to(self.device), covariates.to(self.device), y.to(self.device)
 
                 optimizer.zero_grad()
-                # outputs = self.model(x, covariates)
-                outputs = self.model(x)
+
+                outputs = self.model(x, covariates) if use_covariates else self.model(x)
                 # loss = F.mse_loss(outputs, y)
                 loss = self.criterion(outputs, y)
                 loss.backward()
@@ -884,7 +897,8 @@ class EstimatorFfn(EstimatorBase):
             with torch.no_grad():
                 for x, covariates, y in val_loader:
                     x, covariates, y = x.to(self.device), covariates.to(self.device), y.to(self.device)
-                    outputs = self.model(x, covariates)
+
+                    outputs = self.model(x, covariates) if use_covariates else self.model(x)
                     loss = F.mse_loss(outputs, y)
                     val_loss += loss.item() * x.size(0)
             # Calculate average losses
@@ -900,15 +914,14 @@ class EstimatorFfn(EstimatorBase):
                 writer.add_scalar('Val/Loss', val_loss, epoch)
 
             # Check for early stopping
-            # !! Turned off early stopping, switch back si quires
-            # if val_loss < best_val_loss:
-            #     best_val_loss = val_loss
-            #     early_stopping_counter = 0
-            # else:
-            #     early_stopping_counter += 1
-            #     if early_stopping_counter >= patience:
-            #         print('stopped early')
-            #         break
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                early_stopping_counter = 0
+            else:
+                early_stopping_counter += 1
+                if early_stopping_counter >= patience:
+                    print('stopped early')
+                    break
 
         # TODO (maybe): add more capabilties to this writer...
         if writer is not None:
@@ -994,7 +1007,7 @@ class EstimatorFfn(EstimatorBase):
                 batch_y = batch_y.to(self.device)
 
                 # Forward pass
-                outputs = self.model(batch_x, batch_covar)
+                outputs = self.model(batch_x, batch_covar) if self.model.has_covariates else self.model(batch_x)
 
                 # Compute loss
                 loss = self.criterion(outputs, batch_y)
@@ -1190,6 +1203,7 @@ class EstimatorFfn(EstimatorBase):
         self.test_loader = test_loader
         all_outputs = []
 
+        use_covariates = self.model.has_covariates if hasattr(self.model, 'has_covariates') else True
         with torch.no_grad():  # Disable gradient computation
             for batch in test_loader:
                 x, covariates = batch
@@ -1199,7 +1213,7 @@ class EstimatorFfn(EstimatorBase):
                 x, covariates = x.to(self.device), covariates.to(self.device)
 
                 # Perform the forward pass
-                outputs = self.model(x, covariates)
+                outputs = self.model(x, covariates) if use_covariates else self.model(x)
 
                 all_outputs.append(outputs.cpu().numpy())  # Transfer outputs back to CPU and convert to numpy array
 

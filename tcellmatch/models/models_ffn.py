@@ -25,12 +25,12 @@ class ModelBiRnn(nn.Module):
             input_shapes: tuple,
             model: str,
             topology: List[int],
-            split: bool,
+            split: bool = False,
             residual_connection: bool = False,
             aa_embedding_dim: Union[int, None] = 0,
             depth_final_dense: int = 1,
             out_activation: str = "linear",
-            dropout: float = 0.0
+            dropout: float = 0.0,
     ):
         """ BiLSTM-based feed-forward network with optional 1x1 convolutional embedding layer.
 
@@ -85,8 +85,10 @@ class ModelBiRnn(nn.Module):
         self.bi_peptide_layers = nn.ModuleList()
         self.linear_layers = nn.ModuleList()
 
+
         input_dim = (input_shapes[0], input_shapes[1], input_shapes[2])
         input_covar_shape = (input_shapes[3],)
+        self.has_covariates = input_shapes[3] != 0
         # Optional amino acid embedding:
         if aa_embedding_dim is not None:
             self.embed = LayerAaEmbedding(
@@ -126,18 +128,14 @@ class ModelBiRnn(nn.Module):
                             bidirectional=True
                         )
                     )
-        # Final dense layers.from
-        # !! BiGRU not implemented
+
         for i in range(self.depth_final_dense):
-            # print(self.bi_layers[-1].lstm.hidden_size * 2 + input_covar_shape[-1])
-            # TODO: not sure why it always requires + 2 ...
             if split:
                 # 2 peptide x 2 for bidirectionality
                 in_shape = self.bi_layers[-1].lstm.hidden_size * 4 + input_covar_shape[-1]
-                # in_shape = self.bi_layers[-1].lstm.hidden_size * 4 + 2
             else:
                 in_shape = self.bi_layers[-1].lstm.hidden_size * 2 + input_covar_shape[-1]
-                # in_shape = self.bi_layers[-1].lstm.hidden_size * 2 + 2
+            # !! BiGRU layers not implemented
             # elif self.model.lower() == "bigru":
             self.linear_layers.append(torch.nn.Linear(
                 in_features=in_shape if i == 0 else self.labels_dim,
@@ -154,10 +152,51 @@ class ModelBiRnn(nn.Module):
         x : torch.Tensor,
         covar: torch.Tensor = None,
         save_embeddings: bool = False,
-        fn: str = 'bilstm_embeddings'
+        fn: str = 'bilstm_embeddings',
         ):
         # do this in function to avoid always passing the same object
-        if covar is not None:
+        if covar is None:
+            covar = torch.Tensor([[]])
+        x = torch.squeeze(x, dim=1)
+        x = 2 * (x - 0.5)
+
+        x = self.embed(x)
+
+        if self.split:
+            pep = x[:, self.x_len:, :]
+            x = x[:, :self.x_len, :]  # TCR sequence from here on.
+        for layer in self.bi_layers:
+            x = layer(x)
+        print(type(self.bi_layers))
+        print(type(x))
+
+
+        for layer in self.bi_peptide_layers:
+            pep = layer(pep)
+
+        if self.split:
+            x = torch.cat([x, pep], axis=1)
+        
+        # Optional concatenation of non-sequence covariates.
+        # if covar.shape[1] > 0:
+        if covar is not None and covar.shape[1] > 0:
+            x = torch.cat([x, covar], axis=1)
+        if save_embeddings:
+            torch.save(x, f'{fn}.pt')  
+        for layer in self.linear_layers:
+            x = layer(x)
+        return x
+    
+    def get_embeddings(
+        self,
+        x : torch.Tensor,
+        covar: torch.Tensor = None,
+        save_embeddings: bool = False,
+        fn: str = 'bilstm_embeddings',
+        ):
+        # just the above method with the linear layers removed
+        # do this in function to avoid always passing the same object
+        if covar is None:
             covar = torch.Tensor([[]])
         x = torch.squeeze(x, dim=1)
         x = 2 * (x - 0.5)
@@ -180,13 +219,6 @@ class ModelBiRnn(nn.Module):
         # if covar.shape[1] > 0:
         if covar is not None and covar.shape[1] > 0:
             x = torch.cat([x, covar], axis=1)
-        if save_embeddings:
-            torch.save(x, f'{fn}.pt')  
-        for layer in self.linear_layers:
-            # print(x.shape)
-            x = layer(x)
-            # print(x.shape)
-        return x
 
 
 class ModelSa(nn.Module):
@@ -389,6 +421,8 @@ class ModelConv:
         self.split = split
         assert not split, "not implemented"
         self.run_eagerly = False
+        # i.e., self.covariates_train.shape[1] != 0
+        self.has_covariates = bool(input_shapes[3])
         self.x_len = input_shapes[4]
 
         input_tcr = tf.keras.layers.Input(
