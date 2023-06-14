@@ -64,7 +64,7 @@ class ModelBiRnn(nn.Module):
             "depth_final_dense": depth_final_dense,
             "out_activation": out_activation,
             "dropout": dropout,
-            "split": split
+            "split": split,
         }
         # Attention!!! output dim of biLSTM is two times of the dim of LSTM TODO this is not accounted for yet.
         # return_sequences=False means we only return the state of last cell in LSTM
@@ -217,6 +217,8 @@ class ModelBiRnn(nn.Module):
         # if covar.shape[1] > 0:
         if covar is not None and covar.shape[1] > 0:
             x = torch.cat([x, covar], axis=1)
+
+        return x
 
 
 class ModelSa(nn.Module):

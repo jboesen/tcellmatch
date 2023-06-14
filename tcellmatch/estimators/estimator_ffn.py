@@ -286,7 +286,8 @@ class EstimatorFfn(EstimatorBase):
             "loss": loss,
             "label_smoothing": label_smoothing,
             "optimize_for_gpu": optimize_for_gpu,
-            "dtype": dtype
+            "dtype": dtype,
+            "use_covariates": use_covariates
         }
 
         self.model = ModelBiRnn(
@@ -1454,10 +1455,7 @@ class EstimatorFfn(EstimatorBase):
                 - any other string: This will be the new directory.
         :return:
         """
-        # if fn is not None:
-        #     fn_settings = fn
-        #     fn_data = fn
-        #     fn_model = fn
+
         if not (fn_settings and fn_data and fn_model) and not fn:
             raise ValueError("Please supply either fn or all of fn_settings, fn_data and fn_model.")
         if not fn_settings:
@@ -1553,7 +1551,8 @@ class EstimatorFfn(EstimatorBase):
                 loss=self.model_hyperparam["loss"],
                 label_smoothing=self.model_hyperparam["label_smoothing"],
                 optimize_for_gpu=self.model_hyperparam["optimize_for_gpu"],
-                dtype=self.model_hyperparam["dtype"]
+                dtype=self.model_hyperparam["dtype"],
+                use_covariates=self.model_hyperparam["use_covariates"]
             )
         elif self.model_hyperparam["model"].lower() in ["sa", "selfattention"]:
             self.build_self_attention(
