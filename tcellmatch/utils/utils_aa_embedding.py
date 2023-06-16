@@ -18,7 +18,6 @@ def read_blosum(fn):
     )
     return blosum_tab.to_dict(orient="list")
 
-
 def encode_as_blosum(
         x: List[str],
         blosum_embedding: dict
@@ -53,7 +52,7 @@ def encode_as_blosum(
             if xij is None:  # Fill with end-of-sequence chars if peptide was not found.
                 x_encoded[i, j, :, -1] = 1
             else:
-                for k, aa in enumerate(xij):  # Loop over observed sequence positions.
+                for k, aa in enumerate(xij.keys()):  # Loop over observed sequence positions.
                     x_encoded[i, j, k, :-1] = blosum_embedding[aa]
                 # Fill remaining positions as None.
                 for k in np.arange(len(xij), dim_pos):  # Loop over padded remaining sequence positions.
