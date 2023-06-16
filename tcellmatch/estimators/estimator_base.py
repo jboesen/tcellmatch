@@ -10,7 +10,6 @@ import numpy as np
 import patsy
 import os
 
-
 from tcellmatch.utils.utils_aa_embedding import read_blosum, encode_as_blosum, encode_as_onehot
 
 

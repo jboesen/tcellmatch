@@ -51,3 +51,5 @@ SAVED_IDX_idx_train.npy
 SAVED_IDX_idx_train_val.npy
 ffn_continuous.npz
 BLOSUM50.txt
+tutorial_data
+BLOSUM50.csv
