@@ -53,3 +53,6 @@ ffn_continuous.npz
 BLOSUM50.txt
 tutorial_data
 BLOSUM50.csv
+all_clono_labels.pt
+all_unique_clono.pt
+embeddings_labels_df.csv
