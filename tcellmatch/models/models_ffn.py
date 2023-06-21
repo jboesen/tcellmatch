@@ -288,6 +288,7 @@ class ModelSa(nn.Module):
         self.x_len = input_shapes[4]
         self.embed_attention_layers = nn.ModuleList()
         self.linear_layers = nn.ModuleList()
+        self.has_covariates = True;
 
         input_tcr = torch.Tensor(input_shapes[0], input_shapes[1], input_shapes[2])
 
@@ -340,6 +341,33 @@ class ModelSa(nn.Module):
         for layer in self.linear_layers:
             x = layer(x)
         return x
+
+    # def get_embeddings(self, x, input_covar=None):
+    #     # forward method w/o linear layers
+    #     x = torch.squeeze(x, dim=1)
+    #     x = 2 * (x - 0.5)
+    #     for layer in self.embed_attention_layers:
+    #         x = layer(x)
+    #     x = x.view(-1, x.size(1) * x.size(2))
+
+    #     # Optional concatenation of non-sequence covariates.
+    #     if input_covar.shape[-1] > 0:
+    #         x = torch.cat([x, input_covar], axis=1)
+    #     return x
+    def get_embeddings(self, x, input_covar=None):
+        # forward method w/o linear layers
+        x = torch.squeeze(x, dim=1)
+        x = 2 * (x - 0.5)
+        for layer in self.embed_attention_layers:
+            x = layer(x)
+        x = x.view(-1, x.size(1) * x.size(2))
+
+        # Optional concatenation of non-sequence covariates.
+        if input_covar is not None and input_covar.shape[-1] > 0:
+            x = torch.cat([x, input_covar], axis=1)
+        return x
+
+
 
 # !! Still uses tf
 class ModelConv:

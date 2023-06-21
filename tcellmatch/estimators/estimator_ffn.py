@@ -1008,7 +1008,7 @@ class EstimatorFfn(EstimatorBase):
                 batch_y = batch_y.to(self.device)
 
                 # Forward pass
-                if hasattr(self.mode, 'has_covariates') and self.model.has_covariates:
+                if hasattr(self.model, 'has_covariates') and self.model.has_covariates:
                     outputs = self.model(batch_x, batch_covar)
                 else:
                     outputs = self.model(batch_x)
