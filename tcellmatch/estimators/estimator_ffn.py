@@ -1008,7 +1008,10 @@ class EstimatorFfn(EstimatorBase):
                 batch_y = batch_y.to(self.device)
 
                 # Forward pass
-                outputs = self.model(batch_x, batch_covar) if self.model.has_covariates else self.model(batch_x)
+                if hasattr(self.mode, 'has_covariates') and self.model.has_covariates:
+                    outputs = self.model(batch_x, batch_covar)
+                else:
+                    outputs = self.model(batch_x)
 
                 # Compute loss
                 loss = self.criterion(outputs, batch_y)
