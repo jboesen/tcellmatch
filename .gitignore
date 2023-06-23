@@ -16,7 +16,7 @@ tutorials/saved_model
 tcell-env/bin
 tcell-env/include
 tcell-env/lib/python3.11/site-packages/*
-!tcell-env/lib/python3.11/site-packages/tcellmatch/*
+!tcell-env/lib/python3.11/site-packages/tcellmatch
 vdj_v1_hs_aggregated_donor1_binarized_matrix.csv
 vdj_v1_hs_aggregated_donor2_binarized_matrix.csv
 vdj_v1_hs_aggregated_donor2_clonotypes.csv
