@@ -12,6 +12,7 @@ import pandas as pd
 import scipy.sparse
 import torch
 import torch.nn as nn
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.nn import functional as F
@@ -355,7 +356,7 @@ class EstimatorFfn(EstimatorBase):
         elif loss == "mean_squared_error" or loss == "mse":
             return nn.MSELoss()
         elif loss == "poisson" or loss == "pois":
-            return nn.PoissonNLLLoss()
+            return nn.PoissonNLLLoss(eps=1e-5)
         else:
             raise ValueError("Invalid loss name: " + loss)
         return None
@@ -791,7 +792,7 @@ class EstimatorFfn(EstimatorBase):
         epochs : int = 1000,
         batch_size : int = 128,
         validation_split : float = 0.1,
-        patience : int =20,
+        patience : int = 4,
         lr_schedule_min_lr: float = 1e-5,
         lr_schedule_factor : float= 0.2,
         lr_schedule_patience : int = 5,
@@ -939,7 +940,7 @@ class EstimatorFfn(EstimatorBase):
                     x, covariates, y = x.to(self.device), covariates.to(self.device), y.to(self.device)
 
                     outputs = self.model(x, covariates) if use_covariates else self.model(x)
-                    loss = F.mse_loss(outputs, y)
+                    loss = self.criterion(outputs, y)
                     val_loss += loss.item() * x.size(0)
             # Calculate average losses
             train_loss = running_loss / len(train_loader.dataset)
@@ -983,6 +984,7 @@ class EstimatorFfn(EstimatorBase):
             self,
             batch_size: int = 1024,
             test_only: bool = True,
+            antigen_col: int | None = None
     ):
         """ Evaluate loss on test data.
 
@@ -993,7 +995,8 @@ class EstimatorFfn(EstimatorBase):
             x=self.x_test,
             covar=self.covariates_test,
             y=self.y_test,
-            batch_size=batch_size
+            batch_size=batch_size,
+            antigen_col=antigen_col
         )
         if not test_only:
             results_val = self.evaluate_any(
@@ -1130,6 +1133,7 @@ class EstimatorFfn(EstimatorBase):
             "val": results_val,
             "train": results_train
         }
+
 
     def _evaluate_custom_any(
             self,
@@ -1289,6 +1293,37 @@ class EstimatorFfn(EstimatorBase):
             batch_size=batch_size,
             verbose=0
         )
+    
+    def get_residuals(self, antigen_idx: int = 0):
+        """
+        Plot a histogram of residuals for a specific antigen.
+        
+        This method calculates the residuals by subtracting y_test from predictions,
+        and plots a histogram of the residuals for the antigen specified by antigen_idx.
+
+        :param antigen_idx: The index of the antigen for which to plot the histogram.
+                            Defaults to 0, which corresponds to the first antigen.
+        :type antigen_idx: int
+        """
+        # Calculate residuals
+        assert self.predictions is not None, 'Must call predict() before calling get_residuals'
+        residual = self.predictions - self.y_test
+        
+        # Extract the data for the specified antigen
+        data = residual[:, antigen_idx]
+        
+        # Create a figure
+        fig, ax = plt.subplots()
+        
+        # Plot the histogram
+        ax.hist(data, bins=10, color='blue', alpha=0.7)
+        ax.set_title(f'Antigen {antigen_idx}')
+        ax.set_xlabel('Residual Value')
+        ax.set_ylabel('Frequency')
+
+        # Show the plot
+        plt.show()
+
 
     def transform_predictions_any(
             self,
