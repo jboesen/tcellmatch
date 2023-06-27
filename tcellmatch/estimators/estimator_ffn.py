@@ -367,7 +367,7 @@ class EstimatorFfn(EstimatorBase):
         elif loss == "mean_squared_error" or loss == "mse":
             return nn.MSELoss()
         elif loss == "poisson" or loss == "pois":
-            return nn.PoissonNLLLoss(eps=1e-5)
+            return nn.PoissonNLLLoss(eps=1e-5, log_input=False)
         else:
             raise ValueError("Invalid loss name: " + loss)
         return None
