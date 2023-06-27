@@ -99,9 +99,12 @@ class ModelBiRnn(nn.Module):
         for i, w in enumerate(self.topology):
             if self.model.lower() == "bilstm":
                 if i == 0:
-                    self.bi_layers.append(BiLSTM(input_dim[-1], w, dropout, return_sequences=True))
+                    input_dim = input_dim[-1]
                 else:
-                    self.bi_layers.append(BiLSTM(2 * w, w, dropout, return_sequences=False))
+                    input_dim = 2 * self.topology[i-1]
+
+                return_sequences = True if i < len(self.topology) - 1 else False
+                self.bi_layers.append(BiLSTM(input_dim, w, dropout, return_sequences))
                 if self.split:
                     if i == 0:
                         self.bi_peptide_layers.append(BiLSTM(input_dim[-1], w, dropout, return_sequences=True))

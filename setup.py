@@ -16,6 +16,7 @@ setup(
     long_description_content_type="text/markdown",
     packages=find_packages(),
     use_scm_version=True,
+    python_requires='>=3.10',
     install_requires=[
         'anndata',
         'matplotlib',
