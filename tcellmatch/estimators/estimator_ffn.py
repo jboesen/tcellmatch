@@ -246,7 +246,9 @@ class EstimatorFfn(EstimatorBase):
             optimize_for_gpu: bool,
             dtype: str = "float32",
             use_covariates: bool = True,
-            one_hot_y: bool = True
+            one_hot_y: bool = True,
+            input_shapes: tuple | None = None,
+            labels_dim: int | None = None
     ):
         """ Build a BiLSTM-based feed-forward model to use in the estimator.
 
@@ -278,6 +280,19 @@ class EstimatorFfn(EstimatorBase):
         :return:
         """
         # Save model settings:
+
+        if not input_shapes:
+            input_shapes = (
+                self.x_train.shape[1],
+                self.x_train.shape[2],
+                self.x_train.shape[3],
+                self.covariates_train.shape[1] if use_covariates else 0,
+                self.tcr_len
+            )
+        
+        if not labels_dim:
+            labels_dim = self.y_train.shape[1]
+
         self.model_hyperparam = {
             "model": model,
             "topology": topology,
@@ -292,19 +307,15 @@ class EstimatorFfn(EstimatorBase):
             "label_smoothing": label_smoothing,
             "optimize_for_gpu": optimize_for_gpu,
             "dtype": dtype,
-            "use_covariates": use_covariates
+            "use_covariates": use_covariates,
+            "input_shapes": input_shapes,
+            "labels_dim": labels_dim
         }
 
         self.model = ModelBiRnn(
-            input_shapes=(
-                self.x_train.shape[1],
-                self.x_train.shape[2],
-                self.x_train.shape[3],
-                self.covariates_train.shape[1] if use_covariates else 0,
-                self.tcr_len
-            ),
+            input_shapes=input_shapes,
             model=model.lower(),
-            labels_dim=self.y_train.shape[1],
+            labels_dim=labels_dim,
             topology=topology,
             split=split,
             residual_connection=residual_connection,
@@ -312,7 +323,7 @@ class EstimatorFfn(EstimatorBase):
             depth_final_dense=depth_final_dense,
             out_activation=self._out_activation(loss=loss),
             dropout=dropout,
-            one_hot_y=one_hot_y
+            one_hot_y=one_hot_y,
         )
 
         # Define loss and optimizer
@@ -1277,24 +1288,37 @@ class EstimatorFfn(EstimatorBase):
 
         self.predictions = np.concatenate(all_outputs)
 
-    def predict_any(
-            self,
-            x,
-            covar,
-            batch_size: int = 128
-    ):
-        """ Predict labels on any data.
+    def predict_any(self, x: torch.Tensor, covar: torch.Tensor,batch_size: int = 128, save_embeddings: bool = False):
+        """
+        Predict labels on input data data.
 
         :param batch_size: Batch size for evaluation.
         :return:
         """
-        return self.model.predict(
-            x=(x, covar),
-            batch_size=batch_size,
-            verbose=0
-        )
+        self.model.eval()  # Put the model in evaluation mode
+
+        # Create a DataLoader for the test data
+        data = TensorDataset(x.to(torch.float32), covar.to(torch.float32))
+        loader = DataLoader(data, batch_size=batch_size, shuffle=False)
+        all_outputs = []
+
+        use_covariates = self.model.has_covariates if hasattr(self.model, 'has_covariates') else True
+        with torch.no_grad():  # Disable gradient computation
+            for batch in loader:
+                x, covariates = batch
+                datatype = next(self.model.parameters()).dtype
+                x = x.to(self.device, dtype=datatype)
+                covariates = covariates.to(self.device, dtype=datatype)
+                x, covariates = x.to(self.device), covariates.to(self.device)
+
+                # Perform the forward pass
+                outputs = self.model(x, covariates) if use_covariates else self.model(x)
+
+                all_outputs.append(outputs.cpu().numpy())  # Transfer outputs back to CPU and convert to numpy array
+
+        return np.concatenate(all_outputs)
     
-    def get_residuals(self, antigen_idx: int = 0):
+    def plot_residuals(self, antigen_idx: int = 0):
         """
         Plot a histogram of residuals for a specific antigen.
         
@@ -1640,7 +1664,9 @@ class EstimatorFfn(EstimatorBase):
                 label_smoothing=self.model_hyperparam["label_smoothing"],
                 optimize_for_gpu=self.model_hyperparam["optimize_for_gpu"],
                 dtype=self.model_hyperparam["dtype"],
-                use_covariates=self.model_hyperparam["use_covariates"]
+                use_covariates=self.model_hyperparam["use_covariates"],
+                input_shapes=self.model_hyperparam["input_shapes"],
+                labels_dim=self.model_hyperparam["labels_dim"]
             )
         elif self.model_hyperparam["model"].lower() in ["sa", "selfattention"]:
             self.build_self_attention(
@@ -1911,11 +1937,11 @@ class EstimatorFfn(EstimatorBase):
         :return:
         """
         if train:
-            yhat_train = self.predict_any(x=self.x_train, covar=self.covariates_train)
+            yhat_train = self.predict_any(x=torch.Tensor(self.x_train), covar=torch.Tensor(self.covariates_train))
             np.save(arr=yhat_train, file=fn + "_yhat_train.npy")
 
         if self.x_test is not None and test:
-            yhat_test = self.predict_any(x=self.x_test, covar=self.covariates_test)
+            yhat_test = self.predict_any(x=torch.Tensor(self.x_test), covar=torch.Tensor(self.covariates_test))
             np.save(arr=yhat_test, file=fn + "_yhat_test.npy")
 
     def serialize(self, filename):
