@@ -1318,7 +1318,7 @@ class EstimatorFfn(EstimatorBase):
 
         return np.concatenate(all_outputs)
     
-    def plot_residuals(self, antigen_idx: int = 0):
+    def plot_residuals(self, target_ids : List | None = None, antigen_idx: int = 0):
         """
         Plot a histogram of residuals for a specific antigen.
         
@@ -1330,24 +1330,64 @@ class EstimatorFfn(EstimatorBase):
         :type antigen_idx: int
         """
         # Calculate residuals
-        assert self.predictions is not None, 'Must call predict() before calling get_residuals'
+        if not self.predictions:
+            self.predict()
         residual = self.predictions - self.y_test
-        
+
         # Extract the data for the specified antigen
         data = residual[:, antigen_idx]
-        
+
         # Create a figure
         fig, ax = plt.subplots()
-        
+
         # Plot the histogram
         ax.hist(data, bins=10, color='blue', alpha=0.7)
-        ax.set_title(f'Antigen {antigen_idx}')
+        ax.set_title(target_ids[antigen_idx] if target_ids else f'Antigen {antigen_idx}')
         ax.set_xlabel('Residual Value')
         ax.set_ylabel('Frequency')
 
         # Show the plot
         plt.show()
+    
+    def compare_preds(self, target_ids : List | None = None, antigen_idx : int = 0):
+        """
+        Plot a comparison between true binding and predicted binding.
 
+        The function asserts that predictions have been generated before
+        calling this function. It then generates a scatter plot comparing
+        the true and predicted bindings. The plot is labeled and a title is
+        added based on the `target_ids` or `antigen_idx` parameter. 
+
+        Parameters
+        ----------
+        target_ids : List or None, optional
+            A list of target identifiers. If provided, the title of the plot 
+            will be the identifier at the index `antigen_idx`. If not provided,
+            the title of the plot will be 'Antigen {antigen_idx}'.
+            Default is None.
+
+        antigen_idx : int, optional
+            The index for selecting the antigen from the target_ids list.
+            Also used to generate a title for the plot if no `target_ids` are
+            provided. Default is 0.
+
+        Raises
+        ------
+        AssertionError
+            If predictions have not been generated before calling this function.
+
+        """
+        if not self.predictions:
+            self.predict()
+        plt.plot(self.y_test[:, antigen_idx], self.predictions[:, antigen_idx], '.')
+        max_x = np.max(self.y_test[:, antigen_idx])
+        max_y = np.max(self.predictions[:, antigen_idx])
+        plt.xlim(0, max_x*1.01+0.01)
+        plt.ylim(0, max_y*1.01+0.01)
+        plt.ylabel("predicted binding")
+        plt.xlabel("true binding")
+        plt.title(target_ids[antigen_idx] if target_ids else f'Antigen {antigen_idx}')
+        plt.show()
 
     def transform_predictions_any(
             self,
