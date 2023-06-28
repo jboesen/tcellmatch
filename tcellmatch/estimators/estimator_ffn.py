@@ -1330,7 +1330,7 @@ class EstimatorFfn(EstimatorBase):
         :type antigen_idx: int
         """
         # Calculate residuals
-        if not self.predictions:
+        if self.predictions is None:
             self.predict()
         residual = self.predictions - self.y_test
 
@@ -1377,7 +1377,7 @@ class EstimatorFfn(EstimatorBase):
             If predictions have not been generated before calling this function.
 
         """
-        if not self.predictions:
+        if self.predictions is None:
             self.predict()
         plt.plot(self.y_test[:, antigen_idx], self.predictions[:, antigen_idx], '.')
         max_x = np.max(self.y_test[:, antigen_idx])
