@@ -974,7 +974,7 @@ class EstimatorFfn(EstimatorBase):
             else:
                 early_stopping_counter += 1
                 if early_stopping_counter >= patience and allow_early_stopping:
-                    print('stopped early')
+                    print(f'Training stopped early at epoch {epoch}')
                     break
 
         # TODO (maybe): add more capabilties to this writer...
@@ -1629,7 +1629,7 @@ class EstimatorFfn(EstimatorBase):
             fn_settings: str = None,
             fn_model: str = None
     ):
-        """ Load model from .tf weights.
+        """ Load model from torch weights.
 
         :param self:
         :param fn: Path and file name prefix to read model settings from.
@@ -1932,7 +1932,8 @@ class EstimatorFfn(EstimatorBase):
             self.nc_train = np.asarray(scipy.sparse.load_npz(file=fn + "_nc_train.npz").todense())
         else:
             self.nc_train = None
-        self.clone_train = np.load(file=fn + "_clone_train.npy")
+        # TODO: I added allow pickle here but I don't know why tests need it to run but not actual...
+        self.clone_train = np.load(file=fn + "_clone_train.npy", allow_pickle=True)
 
         if os.path.isfile(fn + "_x_test_shape.npy"):
             x_test_shape = np.load(file=fn + "_x_test_shape.npy")
@@ -1978,11 +1979,11 @@ class EstimatorFfn(EstimatorBase):
         """
         if train:
             yhat_train = self.predict_any(x=torch.Tensor(self.x_train), covar=torch.Tensor(self.covariates_train))
-            np.save(arr=yhat_train, file=fn + "_yhat_train.npy")
+            np.save(arr=yhat_train, file=fn + "/yhat_train.npy")
 
         if self.x_test is not None and test:
             yhat_test = self.predict_any(x=torch.Tensor(self.x_test), covar=torch.Tensor(self.covariates_test))
-            np.save(arr=yhat_test, file=fn + "_yhat_test.npy")
+            np.save(arr=yhat_test, file=fn + "/yhat_test.npy")
 
     def serialize(self, filename):
         with open(filename, "wb") as file:

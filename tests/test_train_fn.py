@@ -1,49 +1,82 @@
+import unittest
 import torch as tc
 import tcellmatch.api as tm
+import os
+import shutil
+import numpy as np
 
-# def test constructors
-# 1. Train one iteration
-def test_build_bilstm():
-    # generate dummy data
-    ffn = tm.models.EstimatorFn()
+class TestEstimatorFfn(unittest.TestCase):
 
-    ffn.x_train = tc.randn((50, 1, 40, 26))
-    ffn.x_val = tc.randn((10, 1, 40, 26))
-    ffn.x_test = tc.randn((10, 1, 40, 26))
-    ffn.covariates_train = tc.randn((50, 2))
-    ffn.covariates_val = tc.randn((10, 2))
-    ffn.covariates_test = tc.randn((10, 2))
-    ffn.y_train = tc.randn((50, 51))
-    ffn.y_val = tc.randn((10, 51))
-    ffn.y_test = tc.randn((10, 51))
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-    ffn.build_bilstm(
-        topology = [10, 10],
-        residual_connection=True,
-        aa_embedding_dim=0,
-        optimizer='adam',
-        lr=0.001,
-        loss='pois' if USE_BIND_COUNTS else 'wcbe',
-        label_smoothing=0,
-        use_covariates=False,
-        one_hot_y=not USE_BIND_COUNTS
-    )
+        self.ffn = tm.models.EstimatorFfn()
 
-    EPOCHS = 2
-    train_curve, val_curve = ffn.train(
-        epochs=EPOCHS,
-        batch_size=8,
-        log_dir='training_runs',
-        save_antigen_loss=False,
-        allow_early_stopping=True,
-        use_existing_eval_partition=True
-    )
-
-    # Checking that the train_curve and val_curve are not None
-    assert train_curve is not None
-    assert val_curve is not None
+        self.ffn.x_train = np.random.randn(50, 1, 40, 26)
+        self.ffn.x_val = np.random.randn(10, 1, 40, 26)
+        self.ffn.x_test = np.random.randn(10, 1, 40, 26)
+        self.ffn.covariates_train = np.random.randn(50, 2)
+        self.ffn.covariates_val = np.random.randn(10, 2)
+        self.ffn.covariates_test = np.random.randn(10, 2)
+        self.ffn.y_train = np.random.randn(50, 51)
+        self.ffn.y_val = np.random.randn(10, 51)
+        self.ffn.y_test = np.random.randn(10, 51)
+        self.ffn.clone_train = np.random.randn(50)
+        self.ffn.idx_train_val = np.array(range(0, 50))
 
 
-    # Checking that the train_curve and val_curve contain proper values (loss should be >=0)
-    assert all(x >= 0 for x in train_curve)
-    assert all(x >= 0 for x in val_curve)
+    def test_train_fn_mse(self):
+        self.ffn.build_bilstm(
+            topology = [10, 10],
+            residual_connection=True,
+            aa_embedding_dim=0,
+            optimizer='adam',
+            lr=0.001,
+            loss='mse',
+            label_smoothing=0,
+            use_covariates=False,
+            one_hot_y=False
+        )
+        EPOCHS = 2
+        train_curve, val_curve = self.ffn.train(
+            epochs=EPOCHS,
+            batch_size=8,
+            log_dir='training_runs',
+            save_antigen_loss=False,
+            allow_early_stopping=True,
+            use_existing_eval_partition=False,
+        )
+
+        # Checking that the train_curve and val_curve are not None
+        assert train_curve is not None
+        assert val_curve is not None
+
+        # Checking that the train_curve and val_curve contain proper values (loss should be >=0)
+        assert all(x >= 0 for x in train_curve)
+        assert all(x >= 0 for x in val_curve)
+
+    def test_train_fn_pois(self):
+        self.ffn.build_bilstm(
+            topology = [10, 10],
+            residual_connection=True,
+            aa_embedding_dim=0,
+            optimizer='adam',
+            lr=0.001,
+            loss='pois',
+            label_smoothing=0,
+            use_covariates=False,
+            one_hot_y=False
+        )
+        EPOCHS = 2
+        train_curve, val_curve = self.ffn.train(
+            epochs=EPOCHS,
+            batch_size=8,
+            log_dir='training_runs',
+            save_antigen_loss=False,
+            allow_early_stopping=True,
+            use_existing_eval_partition=False,
+        )
+
+        # Checking that the train_curve and val_curve are not None
+        assert train_curve is not None
+        assert val_curve is not None

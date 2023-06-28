@@ -34,6 +34,21 @@ class TestEstimatorFfn(unittest.TestCase):
             one_hot_y=False
         )
     
-    def test_predict(self):
-        self.ffn.predict()
-        assert self.ffn.predictions is not None
+    
+    def test_save_load(self):
+        try:
+            os.makedirs("save_test", exist_ok=True)
+            # save_yhat means save predictions
+            self.ffn.save_model_full(f'save_test', save_yhat=True, save_train_data=True)
+            before_eval = self.ffn.evaluate(test_only=True)
+            original_state_dict = {name: param.clone() for name, param in self.ffn.model.state_dict().items()}
+            ffn2 = tm.models.EstimatorFfn()
+            ffn2.load_model_full(fn=f'save_test')
+            ffn2.evaluate(test_only=True)
+            after_eval = ffn2.evaluate(test_only=True)
+            # assert before_eval == after_eval
+            for name, param in ffn2.model.state_dict().items():
+                assert np.allclose(param.cpu().numpy(), original_state_dict[name].cpu().numpy(), atol=1e-6), f"Internal state mismatch in {name}"
+            # assert True
+        finally:
+            shutil.rmtree('save_test')

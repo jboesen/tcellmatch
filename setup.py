@@ -25,17 +25,10 @@ setup(
         'patsy',
         'scikit-learn',
         'scipy',
-        'seaborn'
+        'seaborn',
+        'torch'
     ],
     extras_require={
-        'tensorflow_cpu': [
-            'tensorflow==2.0.1',
-            'tensorflow-probability==0.7',
-        ],
-        'tensorflow_gpu': [
-            "tensorflow-gpu==2.0.1",
-            "tensorflow-probability-gpu==0.7",
-        ],
         'docs': [
             'sphinx',
             'sphinx-autodoc-typehints',
