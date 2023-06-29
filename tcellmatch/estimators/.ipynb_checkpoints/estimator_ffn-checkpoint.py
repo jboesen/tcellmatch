@@ -121,7 +121,7 @@ class EstimatorFfn(EstimatorBase):
             optimize_for_gpu: bool = True,
             dtype: str = "float32",
             use_covariates: bool = True,
-            one_hot_y: bool = False
+            one_hot_y: bool = True
     ):
         """ Build a BiLSTM-based feed-forward model to use in the estimator.
 
@@ -170,6 +170,7 @@ class EstimatorFfn(EstimatorBase):
             one_hot_y=one_hot_y
         )
 
+    # ! Still in tf
     def build_bigru(
             self,
             topology: List[int],
@@ -246,9 +247,7 @@ class EstimatorFfn(EstimatorBase):
             optimize_for_gpu: bool,
             dtype: str = "float32",
             use_covariates: bool = True,
-            one_hot_y: bool = False,
-            input_shapes: tuple | None = None,
-            labels_dim: int | None = None
+            one_hot_y: bool = True
     ):
         """ Build a BiLSTM-based feed-forward model to use in the estimator.
 
@@ -279,19 +278,7 @@ class EstimatorFfn(EstimatorBase):
         :param dtype:
         :return:
         """
-
-        if not input_shapes:
-            input_shapes = (
-                self.x_train.shape[1],
-                self.x_train.shape[2],
-                self.x_train.shape[3],
-                self.covariates_train.shape[1] if use_covariates else 0,
-                self.tcr_len
-            )
-        
-        if not labels_dim:
-            labels_dim = self.y_train.shape[1]
-
+        # Save model settings:
         self.model_hyperparam = {
             "model": model,
             "topology": topology,
@@ -306,15 +293,19 @@ class EstimatorFfn(EstimatorBase):
             "label_smoothing": label_smoothing,
             "optimize_for_gpu": optimize_for_gpu,
             "dtype": dtype,
-            "use_covariates": use_covariates,
-            "input_shapes": input_shapes,
-            "labels_dim": labels_dim
+            "use_covariates": use_covariates
         }
 
         self.model = ModelBiRnn(
-            input_shapes=input_shapes,
+            input_shapes=(
+                self.x_train.shape[1],
+                self.x_train.shape[2],
+                self.x_train.shape[3],
+                self.covariates_train.shape[1] if use_covariates else 0,
+                self.tcr_len
+            ),
             model=model.lower(),
-            labels_dim=labels_dim,
+            labels_dim=self.y_train.shape[1],
             topology=topology,
             split=split,
             residual_connection=residual_connection,
@@ -322,13 +313,13 @@ class EstimatorFfn(EstimatorBase):
             depth_final_dense=depth_final_dense,
             out_activation=self._out_activation(loss=loss),
             dropout=dropout,
-            one_hot_y=one_hot_y,
+            one_hot_y=one_hot_y
         )
 
         # Define loss and optimizer
         self.criterion = self.get_loss_function(loss, label_smoothing)
-        opt_fn = self._get_optimizer(optimizer)
-        self.optimizer = opt_fn(self.model.parameters(), lr=lr)
+        # TODO: (maybe) this is hard-coded, but it's Adam anyway
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
 
     def get_loss_function(self, loss: str, label_smoothing : float = 0.0):
         """
@@ -370,30 +361,7 @@ class EstimatorFfn(EstimatorBase):
         else:
             raise ValueError("Invalid loss name: " + loss)
         return None
-    
-    def _get_optimizer(self, optimizer: str):
-        """
-        :param optimizer: optimizer name
 
-            - "adam" for Adam optimizer.
-            - "sgd" for Stochastic Gradient Descent optimizer.
-            - "rmsprop" for RMSprop optimizer.
-            - "adagrad" for Adagrad optimizer.
-            - "adadelta" for Adadelta optimizer.
-        """
-
-        if optimizer.lower() == "adam":
-            return torch.optim.Adam
-        elif optimizer.lower() == "sgd":
-            return torch.optim.SGD
-        elif optimizer == "rmsprop":
-            opt_fn = torch.optim.RMSprop
-        elif optimizer == "adagrad":
-            opt_fn = torch.optim.Adagrad
-        elif optimizer == "adadelta":
-            opt_fn = torch.optim.Adadelt
-        else:
-            raise ValueError("Invalid optimizer name: " + optimizer)
 
     def build_self_attention(
             self,
@@ -410,9 +378,7 @@ class EstimatorFfn(EstimatorBase):
             label_smoothing: float = 0,
             one_hot_y: bool = False,
             dtype: str = "float32",
-            input_shapes: tuple | None = None,
-            labels_dim: int = None,
-            use_covariates: bool = True
+            use_covariates: bool = True,
     ):
         """ Build a self-attention-based feed-forward model to use in the estimator.
 
@@ -443,39 +409,47 @@ class EstimatorFfn(EstimatorBase):
         :param dtype:
         :return:
         """
-        if not input_shapes:
-            input_shapes = (
-                self.x_train.shape[1],
-                self.x_train.shape[2],
-                self.x_train.shape[3],
-                self.covariates_train.shape[-1] if use_covariates else 0,
-                self.tcr_len
-            )
-        
-        if not labels_dim:
-            labels_dim = self.y_train.shape[1]
+        # i.e., indicator for whether we're not loading a previously trained model
+        is_new_model = hasattr(self, 'x_train') and self.x_train is not None
 
-        self.model_hyperparam = {
-            "model": "selfattention",
-            "attention_size": attention_size,
-            "attention_heads": attention_heads,
-            "split": split,
-            "aa_embedding_dim": aa_embedding_dim,
-            "depth_final_dense": depth_final_dense,
-            "residual_connection": residual_connection,
-            "dropout": dropout,
-            "optimizer": optimizer,
-            "lr": lr,
-            "loss": loss,
-            "label_smoothing": label_smoothing,
-            "dtype": dtype,
-            "input_shapes": input_shapes,
-            "labels_dim": labels_dim
-        }
+        if is_new_model:
+            self.model_hyperparam = {
+                "model": "selfattention",
+                "attention_size": attention_size,
+                "attention_heads": attention_heads,
+                "split": split,
+                "aa_embedding_dim": aa_embedding_dim,
+                "depth_final_dense": depth_final_dense,
+                "residual_connection": residual_connection,
+                "dropout": dropout,
+                "optimizer": optimizer,
+                "lr": lr,
+                "loss": loss,
+                "label_smoothing": label_smoothing,
+                "dtype": dtype,
+                "cov_train_shape": self.covariates_train.shape,
+                "tcr_len": self.tcr_len,
+                "x_train_shape": self.x_train.shape,
+                "y_train_shape": self.y_train.shape,
+                "use_covariates": use_covariates
+            }
+
+        # Use these so we cover the cases that we're loading hyperparams from storage AND training new model
+        x_shape = self.model_hyperparam["x_train_shape"]
+        cov_shape = self.model_hyperparam["cov_train_shape"]
+        y_shape = self.model_hyperparam["y_train_shape"]
+        tcr_len = self.model_hyperparam["tcr_len"]
 
         self.model = ModelSa(
-            input_shapes=input_shapes,
-            labels_dim=labels_dim,
+            input_shapes=(
+                x_shape[1],
+                x_shape[2],
+                x_shape[3],
+                cov_shape[1] if use_covariates else 0,
+                tcr_len
+            ),
+            input_covar_shape = cov_shape,
+            labels_dim=y_shape[1],
             attention_size=attention_size,
             attention_heads=attention_heads,
             residual_connection=residual_connection,
@@ -489,31 +463,27 @@ class EstimatorFfn(EstimatorBase):
 
         # Define loss and optimizer
         self.criterion = self.get_loss_function(loss, label_smoothing)
-        opt_fn = self._get_optimizer(optimizer)
-        self.optimizer = opt_fn(self.model.parameters(), lr=lr)
+        # TODO: (maybe) this is hard-coded, but it's Adam anyway
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
 
+    # ! Still in tf
     def build_conv(
             self,
-            n_conv_layers : int,
-            activations: List[str] | None = None,
-            filter_widths: List[int] | None = None,
-            filters: List[int] | None = None,
-            strides: List[int | None] | None = None,
-            pool_sizes: List[int | None] | None = None,
-            pool_strides: List[int | None] | None = None,
+            activations: List[str],
+            filter_widths: List[int],
+            filters: List[int],
+            strides: Union[List[Union[int, None]], None] = None,
+            pool_sizes: Union[List[Union[int, None]], None] = None,
+            pool_strides: Union[List[Union[int, None]], None] = None,
             batch_norm: bool = False,
-            aa_embedding_dim: int | None = None,
+            aa_embedding_dim: Union[None, int] = None,
             depth_final_dense: int = 1,
             dropout: float = 0.0,
             split: bool = False,
             optimizer: str = "adam",
             lr: float = 0.005,
-            loss: str = "pois",
-            one_hot_y: bool = False,
+            loss: str = "bce",
             label_smoothing: float = 0,
-            input_shapes: tuple | None = None,
-            labels_dim: int | None = None,
-            use_covariates: bool = True,
             dtype: str = "float32"
     ):
         """ Build a self-attention-based feed-forward model to use in the estimator.
@@ -551,21 +521,10 @@ class EstimatorFfn(EstimatorBase):
         :param dtype:
         :return:
         """
-        if not input_shapes:
-            input_shapes = (
-                self.x_train.shape[1],
-                self.x_train.shape[2],
-                self.x_train.shape[3],
-                self.covariates_train.shape[1] if use_covariates else 0,
-                self.tcr_len
-            )
-        
-        if not labels_dim:
-            labels_dim = self.y_train.shape[1]
 
+        # Save model settings.
         self.model_hyperparam = {
             "model": "conv",
-            "n_conv_layers": n_conv_layers,
             "activations": activations,
             "filter_widths": filter_widths,
             "filters": filters,
@@ -581,16 +540,19 @@ class EstimatorFfn(EstimatorBase):
             "lr": lr,
             "loss": loss,
             "label_smoothing": label_smoothing,
-            "dtype": dtype,
-            "input_shapes": input_shapes,
-            "labels_dim": labels_dim,
+            "dtype": dtype
         }
 
-        # Build model
+        # Build model.
         self.model = ModelConv(
-            n_conv_layers=n_conv_layers,
-            input_shapes=input_shapes,
-            labels_dim=labels_dim,
+            input_shapes=(
+                self.x_train.shape[1],
+                self.x_train.shape[2],
+                self.x_train.shape[3],
+                self.covariates_train.shape[1],
+                self.tcr_len
+            ),
+            labels_dim=self.y_train.shape[1],
             activations=activations,
             filter_widths=filter_widths,
             filters=filters,
@@ -602,13 +564,14 @@ class EstimatorFfn(EstimatorBase):
             aa_embedding_dim=aa_embedding_dim,
             out_activation=self._out_activation(loss=loss),
             depth_final_dense=depth_final_dense,
-            dropout=dropout,
-            one_hot_y=one_hot_y
+            dropout=dropout
         )
-        self.criterion = self.get_loss_function(loss, label_smoothing)
-        opt_fn = self._get_optimizer(optimizer)
-        self.optimizer = opt_fn(self.model.parameters(), lr=lr)
-
+        self._compile_model(
+            optimizer=optimizer,
+            lr=lr,
+            loss=loss,
+            label_smoothing=label_smoothing
+        )
 
     # ! Still in tf
     def build_inception(
@@ -867,11 +830,11 @@ class EstimatorFfn(EstimatorBase):
 
         # Set up optimizer and learning rate scheduler
         optimizer = self.optimizer
-        # lr_scheduler = ReduceLROnPlateau(optimizer,
-        #                                   mode='min',
-        #                                   factor=lr_schedule_factor,
-        #                                   patience=lr_schedule_patience,
-        #                                   min_lr=lr_schedule_min_lr)
+        lr_scheduler = ReduceLROnPlateau(optimizer,
+                                          mode='min',
+                                          factor=lr_schedule_factor,
+                                          patience=lr_schedule_patience,
+                                          min_lr=lr_schedule_min_lr)
 
         # Early stopping initialization
         early_stopping_counter = 0
@@ -999,7 +962,7 @@ class EstimatorFfn(EstimatorBase):
             val_loss_list.append(val_loss)
 
             # Update learning rate
-            # lr_scheduler.step(val_loss)
+            lr_scheduler.step(val_loss)
 
             # Write to WandB
             if use_wandb:
@@ -1025,7 +988,7 @@ class EstimatorFfn(EstimatorBase):
             else:
                 early_stopping_counter += 1
                 if early_stopping_counter >= patience and allow_early_stopping:
-                    print(f'Training stopped early at epoch {epoch}')
+                    print('stopped early')
                     break
 
         # TODO (maybe): add more capabilties to this writer...
@@ -1117,9 +1080,9 @@ class EstimatorFfn(EstimatorBase):
                 batch_x = batch_x.to(self.device)
                 batch_covar = batch_covar.to(self.device)
                 batch_y = batch_y.to(self.device)
-                use_covariates = self.model.has_covariates if hasattr(self.model, 'has_covariates') else True 
+
                 # Forward pass
-                if use_covariates:
+                if hasattr(self.model, 'has_covariates') and self.model.has_covariates:
                     outputs = self.model(batch_x, batch_covar)
                 else:
                     outputs = self.model(batch_x)
@@ -1340,37 +1303,24 @@ class EstimatorFfn(EstimatorBase):
 
         self.predictions = np.concatenate(all_outputs)
 
-    def predict_any(self, x: torch.Tensor, covar: torch.Tensor,batch_size: int = 128, save_embeddings: bool = False):
-        """
-        Predict labels on input data data.
+    def predict_any(
+            self,
+            x,
+            covar,
+            batch_size: int = 128
+    ):
+        """ Predict labels on any data.
 
         :param batch_size: Batch size for evaluation.
         :return:
         """
-        self.model.eval()  # Put the model in evaluation mode
-
-        # Create a DataLoader for the test data
-        data = TensorDataset(x.to(torch.float32), covar.to(torch.float32))
-        loader = DataLoader(data, batch_size=batch_size, shuffle=False)
-        all_outputs = []
-
-        use_covariates = self.model.has_covariates if hasattr(self.model, 'has_covariates') else True
-        with torch.no_grad():  # Disable gradient computation
-            for batch in loader:
-                x, covariates = batch
-                datatype = next(self.model.parameters()).dtype
-                x = x.to(self.device, dtype=datatype)
-                covariates = covariates.to(self.device, dtype=datatype)
-                x, covariates = x.to(self.device), covariates.to(self.device)
-
-                # Perform the forward pass
-                outputs = self.model(x, covariates) if use_covariates else self.model(x)
-
-                all_outputs.append(outputs.cpu().numpy())  # Transfer outputs back to CPU and convert to numpy array
-
-        return np.concatenate(all_outputs)
+        return self.model.predict(
+            x=(x, covar),
+            batch_size=batch_size,
+            verbose=0
+        )
     
-    def plot_residuals(self, target_ids : List | None = None, antigen_idx: int = 0):
+    def get_residuals(self, antigen_idx: int = 0):
         """
         Plot a histogram of residuals for a specific antigen.
         
@@ -1382,64 +1332,24 @@ class EstimatorFfn(EstimatorBase):
         :type antigen_idx: int
         """
         # Calculate residuals
-        if self.predictions is None:
-            self.predict()
+        assert self.predictions is not None, 'Must call predict() before calling get_residuals'
         residual = self.predictions - self.y_test
-
+        
         # Extract the data for the specified antigen
         data = residual[:, antigen_idx]
-
+        
         # Create a figure
         fig, ax = plt.subplots()
-
+        
         # Plot the histogram
         ax.hist(data, bins=10, color='blue', alpha=0.7)
-        ax.set_title(target_ids[antigen_idx] if target_ids else f'Antigen {antigen_idx}')
+        ax.set_title(f'Antigen {antigen_idx}')
         ax.set_xlabel('Residual Value')
         ax.set_ylabel('Frequency')
 
         # Show the plot
         plt.show()
-    
-    def compare_preds(self, target_ids : List | None = None, antigen_idx : int = 0):
-        """
-        Plot a comparison between true binding and predicted binding.
 
-        The function asserts that predictions have been generated before
-        calling this function. It then generates a scatter plot comparing
-        the true and predicted bindings. The plot is labeled and a title is
-        added based on the `target_ids` or `antigen_idx` parameter. 
-
-        Parameters
-        ----------
-        target_ids : List or None, optional
-            A list of target identifiers. If provided, the title of the plot 
-            will be the identifier at the index `antigen_idx`. If not provided,
-            the title of the plot will be 'Antigen {antigen_idx}'.
-            Default is None.
-
-        antigen_idx : int, optional
-            The index for selecting the antigen from the target_ids list.
-            Also used to generate a title for the plot if no `target_ids` are
-            provided. Default is 0.
-
-        Raises
-        ------
-        AssertionError
-            If predictions have not been generated before calling this function.
-
-        """
-        if self.predictions is None:
-            self.predict()
-        plt.plot(self.y_test[:, antigen_idx], self.predictions[:, antigen_idx], '.')
-        max_x = np.max(self.y_test[:, antigen_idx])
-        max_y = np.max(self.predictions[:, antigen_idx])
-        plt.xlim(0, max_x*1.01+0.01)
-        plt.ylim(0, max_y*1.01+0.01)
-        plt.ylabel("predicted binding")
-        plt.xlabel("true binding")
-        plt.title(target_ids[antigen_idx] if target_ids else f'Antigen {antigen_idx}')
-        plt.show()
 
     def transform_predictions_any(
             self,
@@ -1638,12 +1548,11 @@ class EstimatorFfn(EstimatorBase):
 
 
     def load_model_full(
-        self,
-        fn: str = None,
-        fn_settings: str = None,
-        fn_data: str = None,
-        fn_model: str = None,
-        load_train_data: bool = True
+            self,
+            fn: str = None,
+            fn_settings: str = None,
+            fn_data: str = None,
+            fn_model: str = None
     ):
         """ Load entire model, this is possible if model weights, data and settings were stored.
 
@@ -1664,12 +1573,12 @@ class EstimatorFfn(EstimatorBase):
         if not (fn_settings and fn_data and fn_model) and not fn:
             raise ValueError("Please supply either fn or all of fn_settings, fn_data and fn_model.")
         if not fn_settings:
-            self.load_data(fn=f'{fn}/data', load_train_data=load_train_data)
+            self.load_data(fn=f'{fn}/data')
             self.load_model(
                 fn=fn
             )
         else:
-            self.load_data(fn=fn_data, load_train_data=load_train_data)
+            self.load_data(fn=fn_data)
             self.load_model(
                 fn_settings=fn_settings,
                 fn_model=fn_model
@@ -1682,7 +1591,7 @@ class EstimatorFfn(EstimatorBase):
             fn_settings: str = None,
             fn_model: str = None
     ):
-        """ Load model from torch weights.
+        """ Load model from .tf weights.
 
         :param self:
         :param fn: Path and file name prefix to read model settings from.
@@ -1757,9 +1666,7 @@ class EstimatorFfn(EstimatorBase):
                 label_smoothing=self.model_hyperparam["label_smoothing"],
                 optimize_for_gpu=self.model_hyperparam["optimize_for_gpu"],
                 dtype=self.model_hyperparam["dtype"],
-                use_covariates=self.model_hyperparam["use_covariates"],
-                input_shapes=self.model_hyperparam["input_shapes"],
-                labels_dim=self.model_hyperparam["labels_dim"]
+                use_covariates=self.model_hyperparam["use_covariates"]
             )
         elif self.model_hyperparam["model"].lower() in ["sa", "selfattention"]:
             self.build_self_attention(
@@ -1771,14 +1678,11 @@ class EstimatorFfn(EstimatorBase):
                 lr=self.model_hyperparam["lr"],
                 loss=self.model_hyperparam["loss"],
                 label_smoothing=self.model_hyperparam["label_smoothing"],
-                input_shapes=self.model_hyperparam["input_shapes"],
-                labels_dim=self.model_hyperparam["labels_dim"],
                 use_covariates=self.model_hyperparam["use_covariates"]
             )
         elif self.model_hyperparam["model"].lower() in ["conv", "convolutional"]:
             self.build_conv(
                 activations=self.model_hyperparam["activations"],
-                n_conv_layers=self.model_hyperparam["n_conv_layers"],
                 filter_widths=self.model_hyperparam["filter_widths"],
                 filters=self.model_hyperparam["filters"],
                 strides=self.model_hyperparam["strides"],
@@ -1792,8 +1696,6 @@ class EstimatorFfn(EstimatorBase):
                 lr=self.model_hyperparam["lr"],
                 loss=self.model_hyperparam["loss"],
                 label_smoothing=self.model_hyperparam["label_smoothing"],
-                input_shapes=self.model_hyperparam["input_shapes"],
-                labels_dim=self.model_hyperparam["labels_dim"],
                 dtype=self.model_hyperparam["dtype"]
             )
         elif self.model_hyperparam["model"].lower() in ["inception"]:
@@ -1831,7 +1733,7 @@ class EstimatorFfn(EstimatorBase):
                 dtype=self.model_hyperparam["dtype"]
             )
         else:
-            raise ValueError(f"Model {self.model_hyperparam['model']} not recognized.")
+            assert False
 
     def save_weights_tonumpy(
             self,
@@ -1953,8 +1855,7 @@ class EstimatorFfn(EstimatorBase):
 
     def load_data(
             self,
-            fn: str,
-            load_train_data: bool = False
+            fn
     ):
         """ Load train and test data.
 
@@ -1963,38 +1864,36 @@ class EstimatorFfn(EstimatorBase):
         :param fn: Path and file name prefix to read all fitting relevant data objects from.
         :return:
         """
-        if load_train_data:
-            x_train_shape = np.load(file=fn + "_x_train_shape.npy")
-            if os.path.isfile(fn + "_x_train.npz"):
-                self.x_train = np.reshape(np.asarray(
-                    scipy.sparse.load_npz(file=fn + "_x_train.npz").todense()
-                ), x_train_shape)
-            else:
-                # Fill x with small all zero array to allow model loading.
-                self.x_train = np.zeros(x_train_shape)
-            covariates_train_shape = np.load(file=fn + "_covariates_train_shape.npy")
-            if os.path.isfile(fn + "_covariates_train.npz") and covariates_train_shape[1] > 0:
-                self.covariates_train = np.reshape(np.asarray(scipy.sparse.load_npz(
-                    file=fn + "_covariates_train.npz"
-                ).todense()), covariates_train_shape)
-            else:
-                self.covariates_train = np.zeros(covariates_train_shape)
-            self.x_len = x_train_shape[2]
-            if os.path.isfile(fn + "_y_train_shape.npy"):
-                y_train_shape = np.load(file=fn + "_y_train_shape.npy")
-            else:
-                y_train_shape = None
-            if os.path.isfile(fn + "_y_train.npz"):
-                self.y_train = np.asarray(scipy.sparse.load_npz(file=fn + "_y_train.npz").todense())
-            else:
-                if y_train_shape is not None:  # depreceated, remove
-                    self.y_train = np.zeros(y_train_shape)
-            if os.path.isfile(fn + "_nc_train.npz"):
-                self.nc_train = np.asarray(scipy.sparse.load_npz(file=fn + "_nc_train.npz").todense())
-            else:
-                self.nc_train = None
-            # TODO: I added allow pickle here but I don't know why tests need it to run but not actual...
-            self.clone_train = np.load(file=fn + "_clone_train.npy", allow_pickle=True)
+        x_train_shape = np.load(file=fn + "_x_train_shape.npy")
+        if os.path.isfile(fn + "_x_train.npz"):
+            self.x_train = np.reshape(np.asarray(
+                scipy.sparse.load_npz(file=fn + "_x_train.npz").todense()
+            ), x_train_shape)
+        else:
+            # Fill x with small all zero array to allow model loading.
+            self.x_train = np.zeros(x_train_shape)
+        covariates_train_shape = np.load(file=fn + "_covariates_train_shape.npy")
+        if os.path.isfile(fn + "_covariates_train.npz") and covariates_train_shape[1] > 0:
+            self.covariates_train = np.reshape(np.asarray(scipy.sparse.load_npz(
+                file=fn + "_covariates_train.npz"
+            ).todense()), covariates_train_shape)
+        else:
+            self.covariates_train = np.zeros(covariates_train_shape)
+        self.x_len = x_train_shape[2]
+        if os.path.isfile(fn + "_y_train_shape.npy"):
+            y_train_shape = np.load(file=fn + "_y_train_shape.npy")
+        else:
+            y_train_shape = None
+        if os.path.isfile(fn + "_y_train.npz"):
+            self.y_train = np.asarray(scipy.sparse.load_npz(file=fn + "_y_train.npz").todense())
+        else:
+            if y_train_shape is not None:  # depreceated, remove
+                self.y_train = np.zeros(y_train_shape)
+        if os.path.isfile(fn + "_nc_train.npz"):
+            self.nc_train = np.asarray(scipy.sparse.load_npz(file=fn + "_nc_train.npz").todense())
+        else:
+            self.nc_train = None
+        self.clone_train = np.load(file=fn + "_clone_train.npy")
 
         if os.path.isfile(fn + "_x_test_shape.npy"):
             x_test_shape = np.load(file=fn + "_x_test_shape.npy")
@@ -2024,7 +1923,7 @@ class EstimatorFfn(EstimatorBase):
                 self.nc_test = None
             self.clone_test = np.load(file=fn + "_clone_test.npy", allow_pickle=True)
 
-            self.load_idx(fn=fn)
+        self.load_idx(fn=fn)
 
     def save_predictions(
             self,
@@ -2039,12 +1938,12 @@ class EstimatorFfn(EstimatorBase):
         :return:
         """
         if train:
-            yhat_train = self.predict_any(x=torch.Tensor(self.x_train), covar=torch.Tensor(self.covariates_train))
-            np.save(arr=yhat_train, file=fn + "/yhat_train.npy")
+            yhat_train = self.predict_any(x=self.x_train, covar=self.covariates_train)
+            np.save(arr=yhat_train, file=fn + "_yhat_train.npy")
 
         if self.x_test is not None and test:
-            yhat_test = self.predict_any(x=torch.Tensor(self.x_test), covar=torch.Tensor(self.covariates_test))
-            np.save(arr=yhat_test, file=fn + "/yhat_test.npy")
+            yhat_test = self.predict_any(x=self.x_test, covar=self.covariates_test)
+            np.save(arr=yhat_test, file=fn + "_yhat_test.npy")
 
     def serialize(self, filename):
         with open(filename, "wb") as file:

@@ -11,6 +11,8 @@ __pycache__/
 tcellmatch.egg-info/
 tcellmatch.egg-info/*
 venv/
+wandb/
+tutorial_data/
 tutorials/.ipynb_checkpoints/
 tutorials/saved_model
 tcell-env/bin
