@@ -77,6 +77,21 @@ class TestEstimatorFfn(unittest.TestCase):
             use_existing_eval_partition=False,
         )
 
+        # TODO -> fix this...
+        # loss_fn = tc.nn.PoissonNLLLoss(full=True)
+        # # Test final loss
+
+        # tc_x = tc.as_tensor(self.ffn.x_train[self.ffn.idx_train], dtype=tc.float32)
+        # tc_y = tc.as_tensor(self.ffn.y_train[self.ffn.idx_train], dtype=tc.float32)
+        # n_datapoints = len(self.ffn.x_train[self.ffn.idx_train])
+        # with tc.no_grad():
+        #     y_pred = self.ffn.model(tc_x)
+
+        # tot_loss = tc.sum(loss_fn(y_pred, tc_y))
+        # loss = tot_loss / n_datapoints
+
+        # print("Calc'ed", loss, "; actual ", train_curve[-1], tot_loss, n_datapoints)
+        # assert abs(loss - train_curve[-1]) < 1e-5, "Incorrect train curve"
         # Checking that the train_curve and val_curve are not None
         assert train_curve is not None
         assert val_curve is not None

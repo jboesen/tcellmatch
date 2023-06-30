@@ -96,7 +96,6 @@ stack-data==0.6.2
 sympy==1.12
 tensorboard==2.12.3
 tensorboard-data-server==0.7.0
-tensorflow-probability==0.20.0
 termcolor==2.3.0
 threadpoolctl==3.1.0
 torch==2.0.1

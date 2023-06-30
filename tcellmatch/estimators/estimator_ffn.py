@@ -367,7 +367,8 @@ class EstimatorFfn(EstimatorBase):
         elif loss == "mean_squared_error" or loss == "mse":
             return nn.MSELoss()
         elif loss == "poisson" or loss == "pois":
-            return nn.PoissonNLLLoss(eps=1e-5, log_input=False)
+            # !! Check, I think so since we took out ReLU...
+            return nn.PoissonNLLLoss(log_input=True, full=True)
         else:
             raise ValueError("Invalid loss name: " + loss)
         return None
@@ -836,11 +837,11 @@ class EstimatorFfn(EstimatorBase):
 
         # Set up optimizer and learning rate scheduler
         optimizer = self.optimizer
-        lr_scheduler = ReduceLROnPlateau(optimizer,
-                                          mode='min',
-                                          factor=lr_schedule_factor,
-                                          patience=lr_schedule_patience,
-                                          min_lr=lr_schedule_min_lr)
+        # lr_scheduler = ReduceLROnPlateau(optimizer,
+        #                                   mode='min',
+        #                                   factor=lr_schedule_factor,
+        #                                   patience=lr_schedule_patience,
+        #                                   min_lr=lr_schedule_min_lr)
 
         # Early stopping initialization
         early_stopping_counter = 0
@@ -954,13 +955,14 @@ class EstimatorFfn(EstimatorBase):
                     loss = self.criterion(outputs, y)
                     val_loss += loss.item() * x.size(0)
             # Calculate average losses
+            print('loss -> ', running_loss, len(train_loader.dataset))
             train_loss = running_loss / len(train_loader.dataset)
             val_loss = val_loss / len(val_loader.dataset)
             val_loss_list.append(val_loss)
             train_loss_list.append(train_loss)
 
             # Update learning rate
-            lr_scheduler.step(val_loss)
+            # lr_scheduler.step(val_loss)
 
             # Write to tensorboard
             if writer is not None:

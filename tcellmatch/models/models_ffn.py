@@ -97,12 +97,12 @@ class ModelBiRnn(nn.Module):
                 )
         # Split input into tcr and peptide
         for i, w in enumerate(self.topology):
-            if self.model.lower() == "bilstm":
-                if i == 0:
-                    input_dim = input_dim[-1]
-                else:
-                    input_dim = 2 * self.topology[i-1]
+            if i == 0:
+                input_dim = input_dim[-1]
+            else:
+                input_dim = 2 * self.topology[i-1]
 
+            if self.model.lower() == "bilstm":
                 return_sequences = True if i < len(self.topology) - 1 else False
                 self.bi_layers.append(BiLSTM(input_dim, w, dropout, return_sequences))
                 if self.split:
@@ -110,6 +110,7 @@ class ModelBiRnn(nn.Module):
                         self.bi_peptide_layers.append(BiLSTM(input_dim[-1], w, dropout, return_sequences=True))
                     else:
                         self.bi_peptide_layers.append(BiLSTM(2 * w, w, dropout, return_sequences=False))
+
             # !! BiGRU layers not implemented
             elif self.model.lower() == "bigru":
                 self.bi_layers.append(
@@ -121,6 +122,7 @@ class ModelBiRnn(nn.Module):
                         bidirectional=True
                     )
                 )
+
                 if self.split:
                     self.bi_peptide_layers.append(
                         nn.GRU(
@@ -133,11 +135,15 @@ class ModelBiRnn(nn.Module):
                     )
 
         for i in range(self.depth_final_dense):
+            # calculate dimensions
+            last_layer = self.bi_layers[-1].lstm if self.model.lower() == "bilstm" else self.bi_layers[-1]
             if split:
                 # 2 peptide x 2 for bidirectionality
-                in_shape = self.bi_layers[-1].lstm.hidden_size * 4 + input_covar_shape[-1]
+                in_shape = last_layer.hidden_size * 4 + input_covar_shape[-1]
             else:
-                in_shape = self.bi_layers[-1].lstm.hidden_size * 2 + input_covar_shape[-1]
+                in_shape = last_layer.hidden_size * 2 + input_covar_shape[-1]
+
+
             # !! BiGRU layers not implemented
             # elif self.model.lower() == "bigru":
             self.linear_layers.append(torch.nn.Linear(
@@ -146,9 +152,7 @@ class ModelBiRnn(nn.Module):
                 bias=True
             ))
             # we don't want softmax if we're predicting bindings for each
-            if i < self.depth_final_dense - 1 or not one_hot_y:
-                self.linear_layers.append(torch.nn.ReLU())
-            else:
+            if i == self.depth_final_dense - 1 and one_hot_y:
                 self.linear_layers.append(torch.nn.Softmax(dim=1))
 
     def forward(
@@ -165,13 +169,15 @@ class ModelBiRnn(nn.Module):
         x = 2 * (x - 0.5)
 
         x = self.embed(x)
-
+        print("Pre-embedding", x.size())
+        print(x.size())
         if self.split:
             pep = x[:, self.x_len:, :]
             x = x[:, :self.x_len, :]  # TCR sequence from here on.
+        print("Post-embedding and splitting", x.size())
         for layer in self.bi_layers:
+            print("Bi Layer", x.size())
             x = layer(x)
-
 
         for layer in self.bi_peptide_layers:
             pep = layer(pep)
@@ -183,6 +189,7 @@ class ModelBiRnn(nn.Module):
         # if covar.shape[1] > 0:
         if covar is not None and covar.shape[1] > 0:
             x = torch.cat([x, covar], axis=1)
+        print("Post-concat", x.size())
         if save_embeddings:
             torch.save(x, f'{fn}.pt')
         for layer in self.linear_layers:
@@ -326,9 +333,7 @@ class ModelSa(nn.Module):
                 out_features=self.labels_dim,
                 bias=True
             ))
-            if i < self.depth_final_dense - 1 or not one_hot_y:
-                self.linear_layers.append(torch.nn.ReLU())
-            else:
+            if i == self.depth_final_dense - 1 and one_hot_y:
                 self.linear_layers.append(torch.nn.Softmax(dim=1))
 
     def forward(self, x, input_covar):
