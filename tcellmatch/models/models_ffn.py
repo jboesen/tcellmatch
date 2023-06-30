@@ -96,52 +96,66 @@ class ModelBiRnn(nn.Module):
                     input_shape=input_dim
                 )
         # Split input into tcr and peptide
-        for i, w in enumerate(self.topology):
-            if i == 0:
-                input_dim = input_dim[-1]
-            else:
-                input_dim = 2 * self.topology[i-1]
-
+        if all(w == topology[0] for w in topology):
             if self.model.lower() == "bilstm":
-                return_sequences = True if i < len(self.topology) - 1 else False
-                self.bi_layers.append(BiLSTM(input_dim, w, dropout, return_sequences))
-                if self.split:
-                    if i == 0:
-                        self.bi_peptide_layers.append(BiLSTM(input_dim[-1], w, dropout, return_sequences=True))
-                    else:
-                        self.bi_peptide_layers.append(BiLSTM(2 * w, w, dropout, return_sequences=False))
-
-            # !! BiGRU layers not implemented
-            elif self.model.lower() == "bigru":
                 self.bi_layers.append(
-                    nn.GRU(
-                        input_dim,
-                        w,
-                        num_layers=1,
-                        dropout=dropout,
+                    nn.LSTM(
+                        input_size=input_dim[-1],
+                        hidden_size=topology[0],
+                        num_layers = len(topology),
+                        dropout=0,
+                        bias=True,
+                        batch_first=True,
                         bidirectional=True
                     )
                 )
-
-                if self.split:
+                if split:
+                    self.bi_peptide_layers.append(
+                        nn.LSTM(
+                            input_size=input_dim[-1],
+                            hidden_size=topology[0],
+                            num_layers = len(topology),
+                            dropout=0,
+                            bias=True,
+                            batch_first=True,
+                            bidirectional=True
+                        )
+                    )
+            elif self.model.lower() == "bigru":
+                self.bi_layers.append(
+                    nn.GRU(
+                        input_size=input_dim[-1],
+                        hidden_size=topology[0],
+                        num_layers = len(topology),
+                        dropout=0,
+                        bias=True,
+                        bidirectional=True
+                    )
+                )
+                if split:
                     self.bi_peptide_layers.append(
                         nn.GRU(
-                            input_dim,
-                            w,
-                            num_layers=1,
-                            dropout=dropout,
+                            input_size=input_dim[-1],
+                            hidden_size=topology[0],
+                            num_layers = len(topology),
+                            dropout=0,
+                            bias=True,
                             bidirectional=True
                         )
                     )
 
+        else:
+        # if True:
+            raise ValueError('Hidden layers must be of the same dimension')
+
         for i in range(self.depth_final_dense):
             # calculate dimensions
-            last_layer = self.bi_layers[-1].lstm if self.model.lower() == "bilstm" else self.bi_layers[-1]
+            # last_layer = self.bi_layers[-1].lstm if self.model.lower() == "bilstm" else self.bi_layers[-1]
             if split:
                 # 2 peptide x 2 for bidirectionality
-                in_shape = last_layer.hidden_size * 4 + input_covar_shape[-1]
+                in_shape = self.bi_layers[-1].hidden_size * 4 + input_covar_shape[-1]
             else:
-                in_shape = last_layer.hidden_size * 2 + input_covar_shape[-1]
+                in_shape = self.bi_layers[-1].hidden_size * 2 + input_covar_shape[-1]
 
 
             # !! BiGRU layers not implemented
@@ -169,16 +183,22 @@ class ModelBiRnn(nn.Module):
         x = 2 * (x - 0.5)
 
         x = self.embed(x)
-        print("Pre-embedding", x.size())
-        print(x.size())
         if self.split:
             pep = x[:, self.x_len:, :]
             x = x[:, :self.x_len, :]  # TCR sequence from here on.
-        print("Post-embedding and splitting", x.size())
         for layer in self.bi_layers:
-            print("Bi Layer", x.size())
-            x = layer(x)
+            # Check if the layer is LSTM or GRU
+            if isinstance(layer, nn.LSTM):
+                lstm_output = layer(x)
+                output, (h_n, c_n) = lstm_output
+            elif isinstance(layer, nn.GRU):
+                gru_output = layer(x)
+                output, h_n = gru_output
 
+            # Use the output at the last time step for both directions
+            x = output[:, -1, :]
+        if len(x.size()) > 2:
+            x = x[:, -1, :]
         for layer in self.bi_peptide_layers:
             pep = layer(pep)
 
@@ -186,10 +206,8 @@ class ModelBiRnn(nn.Module):
             x = torch.cat([x, pep], axis=1)
         
         # Optional concatenation of non-sequence covariates.
-        # if covar.shape[1] > 0:
         if covar is not None and covar.shape[1] > 0:
             x = torch.cat([x, covar], axis=1)
-        print("Post-concat", x.size())
         if save_embeddings:
             torch.save(x, f'{fn}.pt')
         for layer in self.linear_layers:

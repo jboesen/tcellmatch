@@ -955,7 +955,6 @@ class EstimatorFfn(EstimatorBase):
                     loss = self.criterion(outputs, y)
                     val_loss += loss.item() * x.size(0)
             # Calculate average losses
-            print('loss -> ', running_loss, len(train_loader.dataset))
             train_loss = running_loss / len(train_loader.dataset)
             val_loss = val_loss / len(val_loader.dataset)
             val_loss_list.append(val_loss)
