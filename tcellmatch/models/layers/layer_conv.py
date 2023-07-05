@@ -73,7 +73,6 @@ class LayerConv(nn.Module):
 
         if self.dropout > 0:
             self.sublayer_dropout = nn.Dropout(p=self.dropout)
-        print("pool params: size", self.pool_size, "stride", self.pool_stride)
         if self.pool_size is not None:
             self.sublayer_pool = nn.MaxPool1d(
                 kernel_size=self.pool_size,

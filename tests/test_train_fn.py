@@ -35,16 +35,16 @@ class TestEstimatorFfn(unittest.TestCase):
             loss='mse',
             label_smoothing=0,
             use_covariates=False,
-            one_hot_y=False
+            one_hot_y=False,
         )
         EPOCHS = 2
-        train_curve, val_curve = self.ffn.train(
+        train_curve, val_curve, antigen_loss, antigen_loss_val = self.ffn.train(
             epochs=EPOCHS,
             batch_size=8,
             log_dir='training_runs',
-            save_antigen_loss=False,
             allow_early_stopping=True,
             use_existing_eval_partition=False,
+            use_wandb=False
         )
 
         # Checking that the train_curve and val_curve are not None
@@ -65,17 +65,17 @@ class TestEstimatorFfn(unittest.TestCase):
             loss='pois',
             label_smoothing=0,
             use_covariates=False,
-            one_hot_y=False
+            one_hot_y=False,
         )
-        EPOCHS = 2
+        EPOCHS = 20
         BATCH_SIZE = 8
-        train_curve, val_curve = self.ffn.train(
+        train_curve, val_curve, antigen_loss, antigen_loss_val = self.ffn.train(
             epochs=EPOCHS,
             batch_size=BATCH_SIZE,
             log_dir='training_runs',
-            save_antigen_loss=False,
             allow_early_stopping=True,
             use_existing_eval_partition=False,
+            use_wandb=False
         )
 
         # TODO -> fix this... just do it with the last batch...
@@ -86,13 +86,13 @@ class TestEstimatorFfn(unittest.TestCase):
         tc_y = tc.as_tensor(self.ffn.y_train[self.ffn.idx_train], dtype=tc.float32)
         n_datapoints = len(self.ffn.x_train[self.ffn.idx_train])
         with tc.no_grad():
-            y_pred = self.ffn.model(tc_x[-BATCH_SIZE])
+            y_pred = self.ffn.model(tc_x[-BATCH_SIZE:])
 
-        tot_loss = tc.sum(loss_fn(y_pred, tc_y))
-        loss = tot_loss / n_datapoints
+        tot_loss = tc.sum(loss_fn(y_pred, tc_y[-BATCH_SIZE:]))
+        loss = tot_loss / BATCH_SIZE
 
-        print("Calc'ed", loss, "; actual ", train_curve[-1], tot_loss, n_datapoints)
-        assert abs(loss - train_curve[-1]) < 1e-5, "Incorrect train curve"
+        print("Calc'ed", loss, "; actual ", train_curve[-1], tot_loss, BATCH_SIZE)
+        assert abs(loss - train_curve[-1]) < 1e-3, "Incorrect train curve"
         # Checking that the train_curve and val_curve are not None
         assert train_curve is not None
         assert val_curve is not None

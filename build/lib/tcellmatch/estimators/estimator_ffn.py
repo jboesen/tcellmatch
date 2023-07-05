@@ -170,7 +170,6 @@ class EstimatorFfn(EstimatorBase):
             one_hot_y=one_hot_y
         )
 
-    # ! Still in tf
     def build_bigru(
             self,
             topology: List[int],
@@ -184,6 +183,7 @@ class EstimatorFfn(EstimatorBase):
             loss: str = "bce",
             label_smoothing: float = 0,
             optimize_for_gpu: bool = True,
+            use_covariates: bool = True,
             dtype: str = "float32"
     ):
         """ Build a BiGRU-based feed-forward model to use in the estimator.
@@ -228,6 +228,7 @@ class EstimatorFfn(EstimatorBase):
             loss=loss,
             label_smoothing=label_smoothing,
             optimize_for_gpu=optimize_for_gpu,
+            use_covariates=use_covariates,
             dtype=dtype
         )
 

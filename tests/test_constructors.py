@@ -64,16 +64,14 @@ class TestEstimatorFfn(unittest.TestCase):
         self.assertIsNotNone(self.ffn.model)
     
     def test_build_cnn(self):
-        self.ffn.build_cnn(
-            topology=[10, 10],
-            residual_connection=True,
-            aa_embedding_dim=0,
-            optimizer='adam',
-            lr=0.001,
+        self.ffn.build_conv(
+            n_conv_layers = 3,
+            depth_final_dense = 3,
+            filter_widths = [3, 5, 3],  # Filter widths for the three convolutional layers
+            filters = [16, 32, 64],  # Output channels for the three convolutional layers
+            pool_sizes = (2, 2),  # Size of the pooling window
+            pool_strides = (2, 2),  # Stride for moving the pooling window,
             loss='pois',
-            label_smoothing=0,
-            use_covariates=False,
-            one_hot_y=False
         )
         self.assertIsNotNone(self.ffn.model)
 

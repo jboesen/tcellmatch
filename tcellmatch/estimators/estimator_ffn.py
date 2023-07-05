@@ -183,6 +183,8 @@ class EstimatorFfn(EstimatorBase):
             loss: str = "bce",
             label_smoothing: float = 0,
             optimize_for_gpu: bool = True,
+            use_covariates: bool = True,
+            one_hot_y: bool = False,
             dtype: str = "float32"
     ):
         """ Build a BiGRU-based feed-forward model to use in the estimator.
@@ -227,6 +229,8 @@ class EstimatorFfn(EstimatorBase):
             loss=loss,
             label_smoothing=label_smoothing,
             optimize_for_gpu=optimize_for_gpu,
+            use_covariates=use_covariates,
+            one_hot_y=one_hot_y,
             dtype=dtype
         )
 
@@ -840,7 +844,7 @@ class EstimatorFfn(EstimatorBase):
         use_existing_eval_partition : bool = False,
         validation_batch_size: int = 256,
         allow_early_stopping: bool = False,
-        save_antigen_loss: bool = False,
+        # save_antigen_loss: bool = False,
         print_loss: bool = False,
         use_wandb: bool = True
     ) -> Tuple[List[float], List[float]]:
@@ -953,9 +957,9 @@ class EstimatorFfn(EstimatorBase):
         train_loss_list = []
         num_classes = self.y_train.shape[-1]
         # Training loop
-        if save_antigen_loss:
-            antigen_loss = np.zeros((epochs, num_classes))
-            antigen_loss_val = np.zeros((epochs, num_classes))
+        # if save_antigen_loss:
+        antigen_loss = np.zeros((epochs, num_classes))
+        antigen_loss_val = np.zeros((epochs, num_classes))
         for epoch in range(epochs):
             # Training phase
             self.model.train()
@@ -968,9 +972,9 @@ class EstimatorFfn(EstimatorBase):
                 outputs = self.model(x, covariates) if use_covariates else self.model(x)
                 # loss = F.mse_loss(outputs, y)
                 loss = self.criterion(outputs, y)
-                if save_antigen_loss:
-                    for i in range(num_classes):
-                        antigen_loss[epoch, i]+=self.criterion(outputs[:,i],  y[:,i]).item() * x.size(0)
+                # if save_antigen_loss:
+                for i in range(num_classes):
+                    antigen_loss[epoch, i]+=self.criterion(outputs[:,i],  y[:,i]).item() * x.size(0)
                 
                 loss.backward()
                 optimizer.step()
@@ -993,6 +997,7 @@ class EstimatorFfn(EstimatorBase):
                     outputs = self.model(x, covariates) if use_covariates else self.model(x)
                     for i in range(num_classes):
                         antigen_loss_val[epoch, i] += self.criterion(outputs[:,i],  y[:,i]).item() * x.size(0)
+                    
             # Calculate average losses
             all_train_loss = running_loss / len(train_loader.dataset)
             val_loss = antigen_loss_val[epoch].mean() / len(val_loader.dataset)
@@ -1003,13 +1008,13 @@ class EstimatorFfn(EstimatorBase):
 
             # Write to WandB
             if use_wandb:
-                if save_antigen_loss:
-                    antigen_dict = {"antigens/antigen {}".format(i) : a / len(train_loader.dataset)
-                                   for i, a in enumerate(antigen_loss[epoch])}
-                    antigen_dict_val = {"antigens/antigen {} val".format(i) : a / len(val_loader.dataset)
-                                   for i, a in enumerate(antigen_loss_val[epoch])}
-                else:
-                    antigen_dict = {}
+                # if save_antigen_loss:
+                antigen_dict = {"antigens/antigen {}".format(i) : a / len(train_loader.dataset)
+                                for i, a in enumerate(antigen_loss[epoch])}
+                antigen_dict_val = {"antigens/antigen {} val".format(i) : a / len(val_loader.dataset)
+                                for i, a in enumerate(antigen_loss_val[epoch])}
+                # else:
+                #     antigen_dict = {}
                 wandb.log({"epoch": epoch, "sum/train_loss":all_train_loss, "sum/val_loss":val_loss,
                            **antigen_dict, **antigen_dict_val})
                 
@@ -1032,7 +1037,7 @@ class EstimatorFfn(EstimatorBase):
         if writer is not None:
             writer.close()
     
-        return (train_loss_list, val_loss_list,) + save_antigen_loss*(
+        return (train_loss_list, val_loss_list,) + (
             antigen_loss/ len(train_loader.dataset), antigen_loss_val/ len(val_loader.dataset),)
 
     @property
