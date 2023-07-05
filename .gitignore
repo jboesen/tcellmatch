@@ -60,3 +60,5 @@ back at it foos.ipynb
 embeddings_labels_df.csv
 ffn_continuous_blosum.npz
 training_runs
+hparam sweep.ipynb
+wandb

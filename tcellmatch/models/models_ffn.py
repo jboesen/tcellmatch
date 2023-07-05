@@ -353,7 +353,7 @@ class ModelSa(nn.Module):
         # Linear Layers
         for i in range(self.depth_final_dense):
             # input_shape = input_tcr.shape[-1] * input_tcr.shape[-2] + input_covar_shape[-1]
-            input_shape = tcr_shape[-1] * tcr_shape[-2] + 2
+            input_shape = tcr_shape[-1] * tcr_shape[-2] + input_shapes[3]
             self.linear_layers.append(nn.Linear(
                 in_features=input_shape if i == 0 else self.labels_dim,
                 out_features=self.labels_dim,
@@ -362,7 +362,9 @@ class ModelSa(nn.Module):
             if i == self.depth_final_dense - 1 and one_hot_y:
                 self.linear_layers.append(nn.Softmax(dim=1))
 
-    def forward(self, x, input_covar):
+    def forward(self, x, input_covar=None):
+        if input_covar is None:
+            input_covar = torch.Tensor([[]])
         x = torch.squeeze(x, dim=1)
         x = 2 * (x - 0.5)
         for layer in self.embed_attention_layers:

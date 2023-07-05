@@ -68,30 +68,31 @@ class TestEstimatorFfn(unittest.TestCase):
             one_hot_y=False
         )
         EPOCHS = 2
+        BATCH_SIZE = 8
         train_curve, val_curve = self.ffn.train(
             epochs=EPOCHS,
-            batch_size=8,
+            batch_size=BATCH_SIZE,
             log_dir='training_runs',
             save_antigen_loss=False,
             allow_early_stopping=True,
             use_existing_eval_partition=False,
         )
 
-        # TODO -> fix this...
-        # loss_fn = tc.nn.PoissonNLLLoss(full=True)
-        # # Test final loss
+        # TODO -> fix this... just do it with the last batch...
+        loss_fn = tc.nn.PoissonNLLLoss(full=True)
+        # Test final loss
 
-        # tc_x = tc.as_tensor(self.ffn.x_train[self.ffn.idx_train], dtype=tc.float32)
-        # tc_y = tc.as_tensor(self.ffn.y_train[self.ffn.idx_train], dtype=tc.float32)
-        # n_datapoints = len(self.ffn.x_train[self.ffn.idx_train])
-        # with tc.no_grad():
-        #     y_pred = self.ffn.model(tc_x)
+        tc_x = tc.as_tensor(self.ffn.x_train[self.ffn.idx_train], dtype=tc.float32)
+        tc_y = tc.as_tensor(self.ffn.y_train[self.ffn.idx_train], dtype=tc.float32)
+        n_datapoints = len(self.ffn.x_train[self.ffn.idx_train])
+        with tc.no_grad():
+            y_pred = self.ffn.model(tc_x[-BATCH_SIZE])
 
-        # tot_loss = tc.sum(loss_fn(y_pred, tc_y))
-        # loss = tot_loss / n_datapoints
+        tot_loss = tc.sum(loss_fn(y_pred, tc_y))
+        loss = tot_loss / n_datapoints
 
-        # print("Calc'ed", loss, "; actual ", train_curve[-1], tot_loss, n_datapoints)
-        # assert abs(loss - train_curve[-1]) < 1e-5, "Incorrect train curve"
+        print("Calc'ed", loss, "; actual ", train_curve[-1], tot_loss, n_datapoints)
+        assert abs(loss - train_curve[-1]) < 1e-5, "Incorrect train curve"
         # Checking that the train_curve and val_curve are not None
         assert train_curve is not None
         assert val_curve is not None

@@ -447,7 +447,7 @@ class EstimatorFfn(EstimatorBase):
                 self.x_train.shape[1],
                 self.x_train.shape[2],
                 self.x_train.shape[3],
-                self.covariates_train.shape[1] if use_covariates else 0,
+                self.covariates_train.shape[-1] if use_covariates else 0,
                 self.tcr_len
             )
         
