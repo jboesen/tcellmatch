@@ -48,6 +48,34 @@ class TestEstimatorFfn(unittest.TestCase):
             label_smoothing=0
         )
         self.assertIsNotNone(self.ffn.model) 
+    
+    def test_build_bigru(self):
+        self.ffn.build_bigru(
+            topology=[10, 10],
+            residual_connection=True,
+            aa_embedding_dim=0,
+            optimizer='adam',
+            lr=0.001,
+            loss='pois',
+            label_smoothing=0,
+            use_covariates=False,
+            one_hot_y=False
+        )
+        self.assertIsNotNone(self.ffn.model)
+    
+    def test_build_cnn(self):
+        self.ffn.build_cnn(
+            topology=[10, 10],
+            residual_connection=True,
+            aa_embedding_dim=0,
+            optimizer='adam',
+            lr=0.001,
+            loss='pois',
+            label_smoothing=0,
+            use_covariates=False,
+            one_hot_y=False
+        )
+        self.assertIsNotNone(self.ffn.model)
 
 if __name__ == '__main__':
     unittest.main()
