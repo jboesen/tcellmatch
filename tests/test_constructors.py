@@ -24,7 +24,6 @@ class TestEstimatorFfn(unittest.TestCase):
 
         self.ffn.build_bilstm(
             topology=[10, 10],
-            residual_connection=True,
             aa_embedding_dim=0,
             optimizer='adam',
             lr=0.001,
@@ -52,7 +51,6 @@ class TestEstimatorFfn(unittest.TestCase):
     def test_build_bigru(self):
         self.ffn.build_bigru(
             topology=[10, 10],
-            residual_connection=True,
             aa_embedding_dim=0,
             optimizer='adam',
             lr=0.001,
@@ -69,8 +67,8 @@ class TestEstimatorFfn(unittest.TestCase):
             depth_final_dense = 3,
             filter_widths = [3, 5, 3],  # Filter widths for the three convolutional layers
             filters = [16, 32, 64],  # Output channels for the three convolutional layers
-            pool_sizes = (2, 2),  # Size of the pooling window
-            pool_strides = (2, 2),  # Stride for moving the pooling window,
+            pool_sizes = [2]*3,  # Size of the pooling window
+            pool_strides = [2]*3,  # Stride for moving the pooling window,
             loss='pois',
         )
         self.assertIsNotNone(self.ffn.model)

@@ -1,7 +1,4 @@
-# import tensorflow as tf
 from typing import Union, Tuple
-
-# !! TODO: not implemented in torch
 
 import torch
 import torch.nn as nn
@@ -38,7 +35,6 @@ class LayerConv(nn.Module):
         :param dtype:
         """
         super(LayerConv, self).__init__()
-        
         self.activation = activation
         self.filter_width = filter_width
         self.filters = filters

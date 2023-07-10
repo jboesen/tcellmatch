@@ -25,7 +25,6 @@ class ModelBiRnn(nn.Module):
             model: str,
             topology: List[int],
             split: bool = False,
-            residual_connection: bool = False,
             aa_embedding_dim: int = 0,
             depth_final_dense: int = 1,
             out_activation: str = "linear",
@@ -41,7 +40,6 @@ class ModelBiRnn(nn.Module):
         :param model: Layer type to use: {"bilstm", "bigru"}.
         :param topology: The depth of each bilstm layer (length of feature vector)
         :param dropout: drop out rate for bilstm.
-        :param residual_connection: apply residual connection or not.
         :param aa_embedding_dim: Dimension of the linear amino acid embedding, ie number of 1x1 convolutional filters.
             This is set to the input dimension if aa_embedding_dim==0.
         :param depth_final_dense: Number of final densely connected layers. They all have labels_dim number of units
@@ -59,7 +57,6 @@ class ModelBiRnn(nn.Module):
             "labels_dim": labels_dim,
             "input_shapes": input_shapes,
             "model": model,
-            "residual_connection": residual_connection,
             "aa_embedding_dim": aa_embedding_dim,
             "depth_final_dense": depth_final_dense,
             "out_activation": out_activation,
@@ -72,7 +69,6 @@ class ModelBiRnn(nn.Module):
         self.input_shapes = input_shapes
         self.model = model
         self.topology = topology
-        self.residual_connection = residual_connection
         self.aa_embedding_dim = aa_embedding_dim
         self.depth_final_dense = depth_final_dense
         self.out_activation = out_activation
@@ -158,8 +154,6 @@ class ModelBiRnn(nn.Module):
                 in_shape = self.bi_layers[-1].hidden_size * 2 + input_covar_shape[-1]
 
 
-            # !! BiGRU layers not implemented
-            # elif self.model.lower() == "bigru":
             self.linear_layers.append(nn.Linear(
                 in_features=in_shape if i == 0 else self.labels_dim,
                 out_features=self.labels_dim,
@@ -301,7 +295,6 @@ class ModelSa(nn.Module):
             "input_shapes": input_shapes,
             "attention_size": attention_size,
             "attention_heads": attention_heads,
-            "residual_connection": residual_connection,
             "aa_embedding_dim": aa_embedding_dim,
             "depth_final_dense": depth_final_dense,
             "out_activation": out_activation,
@@ -509,7 +502,13 @@ class ModelConv(nn.Module):
                 shape_embedding=self.aa_embedding_dim,
                 input_shape=input_dim
             )
-        
+        assert n_conv_layers == len(self.activations), "n_conv_layers must be equal to the length of activations"
+        assert n_conv_layers == len(self.filters), "n_conv_layers must be equal to the length of filters"
+        assert n_conv_layers == len(self.filter_widths), "n_conv_layers must be equal to the length of filter_widths"
+        assert n_conv_layers == len(self.strides), "n_conv_layers must be equal to the length of strides"
+        assert n_conv_layers == len(self.pool_sizes), "n_conv_layers must be equal to the length of pool_sizes"
+        assert n_conv_layers == len(self.pool_strides), "n_conv_layers must be equal to the length of pool_strides"
+
         for i, (a, f, fw, s, psize, pstride) in enumerate(zip(
                 self.activations,
                 self.filters,
@@ -529,6 +528,7 @@ class ModelConv(nn.Module):
                 batch_norm=self.batch_norm,
                 dropout=self.dropout
             ))
+
         for i in range(self.depth_final_dense):
             # calculate dimensions
             if i == 0:
@@ -545,12 +545,14 @@ class ModelConv(nn.Module):
                 in_shape += input_covar_shape[-1]
             else:
                 in_shape = self.labels_dim
+
             self.linear_layers.append(nn.Linear(
                 in_features=in_shape if i == 0 else self.labels_dim,
                 out_features=self.labels_dim,
                 bias=True
             ))
 
+            # add activation
             if i == self.depth_final_dense - 1 and one_hot_y:
                 self.linear_layers.append(nn.Softmax())
             elif i < self.depth_final_dense - 1:
@@ -570,9 +572,10 @@ class ModelConv(nn.Module):
         x = 2 * (x - 0.5)
         if hasattr(self, 'embed') and self.embed is not None:
             x = self.embed(x)
-        
-        for i, layer in enumerate(self.conv_layers):
-            x = layer(x)
+        print('input conv', x.shape)
+        for i, convolve in enumerate(self.conv_layers):
+            x = convolve(x)
+        print('output conv', x.shape)
         x = torch.reshape(x, (-1, x.shape[1] * x.shape[2]))
         if covar.shape[1] > 0:
             x = torch.concat([x, covar], axis=1)

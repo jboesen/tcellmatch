@@ -112,7 +112,6 @@ class EstimatorFfn(EstimatorBase):
             split: bool = False,
             aa_embedding_dim: Union[None, int] = None,
             depth_final_dense: int = 1,
-            residual_connection: bool = False,
             dropout: float = 0.0,
             optimizer: str = "adam",
             lr: float = 0.005,
@@ -126,7 +125,6 @@ class EstimatorFfn(EstimatorBase):
         """ Build a BiLSTM-based feed-forward model to use in the estimator.
 
         :param topology: The depth of each bilstm layer (length of feature vector)
-        :param residual_connection: apply residual connection or not.
         :param aa_embedding_dim: Dimension of the linear amino acid embedding, ie number of 1x1 convolutional filters.
             This is set to the input dimension if aa_embedding_dim==0.
         :param depth_final_dense: Number of final densely connected layers. They all have labels_dim number of units
@@ -158,7 +156,6 @@ class EstimatorFfn(EstimatorBase):
             split=split,
             aa_embedding_dim=aa_embedding_dim,
             depth_final_dense=depth_final_dense,
-            residual_connection=residual_connection,
             dropout=dropout,
             optimizer=optimizer,
             lr=lr,
@@ -176,7 +173,6 @@ class EstimatorFfn(EstimatorBase):
             split: bool = False,
             aa_embedding_dim: Union[None, int] = None,
             depth_final_dense: int = 1,
-            residual_connection: bool = False,
             dropout: float = 0.0,
             optimizer: str = "adam",
             lr: float = 0.005,
@@ -190,7 +186,6 @@ class EstimatorFfn(EstimatorBase):
         """ Build a BiGRU-based feed-forward model to use in the estimator.
 
         :param topology: The depth of each bilstm layer (length of feature vector)
-        :param residual_connection: apply residual connection or not.
         :param aa_embedding_dim: Dimension of the linear amino acid embedding, ie number of 1x1 convolutional filters.
             This is set to the input dimension if aa_embedding_dim==0.
         :param depth_final_dense: Number of final densely connected layers. They all have labels_dim number of units
@@ -222,7 +217,6 @@ class EstimatorFfn(EstimatorBase):
             split=split,
             aa_embedding_dim=aa_embedding_dim,
             depth_final_dense=depth_final_dense,
-            residual_connection=residual_connection,
             dropout=dropout,
             optimizer=optimizer,
             lr=lr,
@@ -241,7 +235,6 @@ class EstimatorFfn(EstimatorBase):
             split: bool,
             aa_embedding_dim: Union[None, int],
             depth_final_dense: int,
-            residual_connection: bool,
             dropout: float,
             optimizer: str,
             lr: float,
@@ -257,7 +250,6 @@ class EstimatorFfn(EstimatorBase):
         """ Build a BiLSTM-based feed-forward model to use in the estimator.
 
         :param topology: The depth of each bilstm layer (length of feature vector)
-        :param residual_connection: apply residual connection or not.
         :param aa_embedding_dim: Dimension of the linear amino acid embedding, ie number of 1x1 convolutional filters.
             This is set to the input dimension if aa_embedding_dim==0.
         :param depth_final_dense: Number of final densely connected layers. They all have labels_dim number of units
@@ -302,7 +294,6 @@ class EstimatorFfn(EstimatorBase):
             "split": split,
             "aa_embedding_dim": aa_embedding_dim,
             "depth_final_dense": depth_final_dense,
-            "residual_connection": residual_connection,
             "dropout": dropout,
             "optimizer": optimizer,
             "lr": lr,
@@ -321,7 +312,6 @@ class EstimatorFfn(EstimatorBase):
             labels_dim=labels_dim,
             topology=topology,
             split=split,
-            residual_connection=residual_connection,
             aa_embedding_dim=aa_embedding_dim,
             depth_final_dense=depth_final_dense,
             out_activation=self._out_activation(loss=loss),
@@ -830,6 +820,13 @@ class EstimatorFfn(EstimatorBase):
             label_smoothing=label_smoothing
         )
 
+    def _average_norm(self):
+        tot, count = 0, 0
+        for x in self.model.parameters():
+            if x.requires_grad:
+                tot += x.norm().item()
+                count += 1
+        return tot / count if count else 0
 
     def train(
         self,
@@ -978,12 +975,12 @@ class EstimatorFfn(EstimatorBase):
                 
                 loss.backward()
                 optimizer.step()
-                running_loss += loss.item() * x.size(0)
+                running_loss += loss.item()
                 train_loss = loss.item()
                 if print_loss:
                     print(train_loss)
                 if use_wandb:
-                    wandb.log({"epoch": epoch, "sum/loss":train_loss},
+                    wandb.log({"epoch": epoch, "sum/loss":train_loss, "avg_norm": _average_norm()},
                               step=k + epoch * len(train_loader))
                 train_loss_list.append(train_loss)
 
@@ -1754,7 +1751,7 @@ class EstimatorFfn(EstimatorBase):
                 topology=self.model_hyperparam["topology"],
                 aa_embedding_dim=self.model_hyperparam["aa_embedding_dim"],
                 depth_final_dense=self.model_hyperparam["depth_final_dense"],
-                residual_connection=self.model_hyperparam["residual_connection"],
+                # residual_connection=self.model_hyperparam["residual_connection"],
                 dropout=self.model_hyperparam["dropout"],
                 optimizer=self.model_hyperparam["optimizer"],
                 lr=self.model_hyperparam["lr"],

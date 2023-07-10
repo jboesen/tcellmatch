@@ -24,11 +24,9 @@ class TestEstimatorFfn(unittest.TestCase):
         self.ffn.clone_train = np.random.randn(50)
         self.ffn.idx_train_val = np.array(range(0, 50))
 
-
     def test_train_fn_mse(self):
         self.ffn.build_bilstm(
             topology = [10, 10],
-            residual_connection=True,
             aa_embedding_dim=0,
             optimizer='adam',
             lr=0.001,
@@ -37,6 +35,7 @@ class TestEstimatorFfn(unittest.TestCase):
             use_covariates=False,
             one_hot_y=False,
         )
+
         EPOCHS = 2
         train_curve, val_curve, antigen_loss, antigen_loss_val = self.ffn.train(
             epochs=EPOCHS,
@@ -58,7 +57,6 @@ class TestEstimatorFfn(unittest.TestCase):
     def test_train_fn_pois(self):
         self.ffn.build_bilstm(
             topology = [10, 10],
-            residual_connection=True,
             aa_embedding_dim=0,
             optimizer='adam',
             lr=0.001,
@@ -68,7 +66,7 @@ class TestEstimatorFfn(unittest.TestCase):
             one_hot_y=False,
         )
         EPOCHS = 20
-        BATCH_SIZE = 8
+        BATCH_SIZE = 5000
         train_curve, val_curve, antigen_loss, antigen_loss_val = self.ffn.train(
             epochs=EPOCHS,
             batch_size=BATCH_SIZE,
@@ -78,7 +76,6 @@ class TestEstimatorFfn(unittest.TestCase):
             use_wandb=False
         )
 
-        # TODO -> fix this... just do it with the last batch...
         loss_fn = tc.nn.PoissonNLLLoss(full=True)
         # Test final loss
 
@@ -88,11 +85,11 @@ class TestEstimatorFfn(unittest.TestCase):
         with tc.no_grad():
             y_pred = self.ffn.model(tc_x[-BATCH_SIZE:])
 
-        tot_loss = tc.sum(loss_fn(y_pred, tc_y[-BATCH_SIZE:]))
-        loss = tot_loss / BATCH_SIZE
+        loss = loss_fn(y_pred, tc_y[-BATCH_SIZE:])
+        # loss = self.ffn.criterion(y_pred, tc_y[-BATCH_SIZE:])
 
-        print("Calc'ed", loss, "; actual ", train_curve[-1], tot_loss, BATCH_SIZE)
-        assert abs(loss - train_curve[-1]) < 1e-3, "Incorrect train curve"
+        print("Calc'ed", loss.item(), "; actual ", train_curve[-1])
+        assert abs(loss.item() - train_curve[-1]) < 1e-3, "Incorrect train curve"
         # Checking that the train_curve and val_curve are not None
         assert train_curve is not None
         assert val_curve is not None
