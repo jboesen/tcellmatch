@@ -64,3 +64,4 @@ ffn_continuous_blosum.npz
 training_runs
 hparam sweep.ipynb
 wandb
+tcell-env

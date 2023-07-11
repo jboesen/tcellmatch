@@ -320,11 +320,11 @@ class EstimatorFfn(EstimatorBase):
         )
 
         # Define loss and optimizer
-        self.criterion = self.get_loss_function(loss, label_smoothing)
+        self.criterion = self._get_loss_function(loss, label_smoothing)
         opt_fn = self._get_optimizer(optimizer)
         self.optimizer = opt_fn(self.model.parameters(), lr=lr)
 
-    def get_loss_function(self, loss: str, label_smoothing : float = 0.0):
+    def _get_loss_function(self, loss: str, label_smoothing : float = 0.0):
         """
         :param loss: loss name
 
@@ -353,8 +353,8 @@ class EstimatorFfn(EstimatorBase):
             return MMD
         if loss == "categorical_crossentropy" or loss == "cce":
             return nn.CrossEntropyLoss()
-        elif loss == "binary_crossentropy" or loss == "bce":
-            return nn.BCELoss()
+        # elif loss == "binary_crossentropy" or loss == "bce":
+        #     return nn.BCELoss()
         elif loss == "weighted_binary_crossentropy" or loss == "wbce":
             return nn.BCEWithLogitsLoss()
         elif loss == "mean_squared_error" or loss == "mse":
@@ -482,7 +482,7 @@ class EstimatorFfn(EstimatorBase):
         )
 
         # Define loss and optimizer
-        self.criterion = self.get_loss_function(loss, label_smoothing)
+        self.criterion = self._get_loss_function(loss, label_smoothing)
         opt_fn = self._get_optimizer(optimizer)
         self.optimizer = opt_fn(self.model.parameters(), lr=lr)
 
@@ -599,7 +599,7 @@ class EstimatorFfn(EstimatorBase):
             dropout=dropout,
             one_hot_y=one_hot_y
         )
-        self.criterion = self.get_loss_function(loss, label_smoothing)
+        self.criterion = self._get_loss_function(loss, label_smoothing)
         opt_fn = self._get_optimizer(optimizer)
         self.optimizer = opt_fn(self.model.parameters(), lr=lr)
 
@@ -922,52 +922,43 @@ class EstimatorFfn(EstimatorBase):
 
         print("Number of observations in training data: %i" % len(idx_train)) 
 
+        np.save('/Users/johnboesen/Documents/Code/#Work/tcellmatch/tests/x_train.npy', self.x_train[idx_train])
         # np is in float64, but model is in float32
-        if use_covariates:
-            train_data = TensorDataset(
-                torch.from_numpy(self.x_train[idx_train]).to(torch.float32),
-                torch.from_numpy(self.covariates_train[idx_train]).to(torch.float32),
-                torch.from_numpy(self.y_train[idx_train]).to(torch.float32)
-                )
-            val_data = TensorDataset(
-                torch.from_numpy(self.x_train[idx_val]).to(torch.float32),
-                torch.from_numpy(self.covariates_train[idx_val]).to(torch.float32),
-                torch.from_numpy(self.y_train[idx_val]).to(torch.float32)
-                )
-        else:
-            train_data = TensorDataset(
-                torch.from_numpy(self.x_train[idx_train]).to(torch.float32),
-                torch.from_numpy(self.covariates_train[idx_train]).to(torch.float32),
-                torch.from_numpy(self.y_train[idx_train]).to(torch.float32)
-                )
-            val_data = TensorDataset(
-                torch.from_numpy(self.x_train[idx_val]).to(torch.float32),
-                torch.from_numpy(self.covariates_train[idx_val]).to(torch.float32),
-                torch.from_numpy(self.y_train[idx_val]).to(torch.float32)
-                )
+        train_data = TensorDataset(
+            torch.from_numpy(self.x_train[idx_train]).to(torch.float32),
+            torch.from_numpy(self.covariates_train[idx_train]).to(torch.float32),
+            torch.from_numpy(self.y_train[idx_train]).to(torch.float32)
+            )
+        val_data = TensorDataset(
+            torch.from_numpy(self.x_train[idx_val]).to(torch.float32),
+            torch.from_numpy(self.covariates_train[idx_val]).to(torch.float32),
+            torch.from_numpy(self.y_train[idx_val]).to(torch.float32)
+            )
 
         train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True,
                                   generator=torch.Generator(device=self.device))
         # self.train_loader = train_loader
-        val_loader = DataLoader(dataset=val_data, batch_size=validation_batch_size, shuffle=False)
+        val_loader = DataLoader(dataset=val_data, batch_size=validation_batch_size, shuffle=True)
         val_loss_list = []
         train_loss_list = []
         num_classes = self.y_train.shape[-1]
-        # Training loop
-        # if save_antigen_loss:
         antigen_loss = np.zeros((epochs, num_classes))
         antigen_loss_val = np.zeros((epochs, num_classes))
         for epoch in range(epochs):
             # Training phase
             self.model.train()
             running_loss = 0.0
+            # we enumerate through covariates, but only use them if use_covariates
             for k, (x, covariates, y) in enumerate(train_loader):
                 x, covariates, y = x.to(self.device), covariates.to(self.device), y.to(self.device)
 
                 optimizer.zero_grad()
-
                 outputs = self.model(x, covariates) if use_covariates else self.model(x)
-                # loss = F.mse_loss(outputs, y)
+
+                if k == len(train_loader) - 1 and epoch == epochs - 1:
+                    np.save('/Users/johnboesen/Documents/Code/#Work/tcellmatch/tests/in_fn_x.npy', x.detach().cpu().numpy())
+                    np.save('/Users/johnboesen/Documents/Code/#Work/tcellmatch/tests/in_fn_outputs.npy', outputs.detach().cpu().numpy())
+
                 loss = self.criterion(outputs, y)
                 # if save_antigen_loss:
                 for i in range(num_classes):
@@ -980,7 +971,7 @@ class EstimatorFfn(EstimatorBase):
                 if print_loss:
                     print(train_loss)
                 if use_wandb:
-                    wandb.log({"epoch": epoch, "sum/loss":train_loss, "avg_norm": _average_norm()},
+                    wandb.log({"epoch": epoch, "sum/loss":train_loss, "avg_norm": self._average_norm()},
                               step=k + epoch * len(train_loader))
                 train_loss_list.append(train_loss)
 
@@ -1322,7 +1313,7 @@ class EstimatorFfn(EstimatorBase):
 
         # Create a DataLoader for the test data
         test_data = TensorDataset(torch.from_numpy(self.x_test), torch.from_numpy(self.covariates_test))
-        test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
+        test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=True)
         self.test_loader = test_loader
         all_outputs = []
 
@@ -1353,7 +1344,7 @@ class EstimatorFfn(EstimatorBase):
 
         # Create a DataLoader for the test data
         data = TensorDataset(x.to(torch.float32), covar.to(torch.float32))
-        loader = DataLoader(data, batch_size=batch_size, shuffle=False)
+        loader = DataLoader(data, batch_size=batch_size, shuffle=True)
         all_outputs = []
 
         use_covariates = self.model.has_covariates if hasattr(self.model, 'has_covariates') else True

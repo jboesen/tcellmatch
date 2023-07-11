@@ -29,7 +29,7 @@ class ModelBiRnn(nn.Module):
             depth_final_dense: int = 1,
             out_activation: str = "linear",
             dropout: float = 0.0,
-            one_hot_y: bool = False
+            one_hot_y: bool = False,
     ):
         """ BiLSTM-based feed-forward network with optional 1x1 convolutional embedding layer.
 
@@ -80,7 +80,6 @@ class ModelBiRnn(nn.Module):
         self.bi_layers = nn.ModuleList()
         self.bi_peptide_layers = nn.ModuleList()
         self.linear_layers = nn.ModuleList()
-
 
         input_dim = (input_shapes[0], input_shapes[1], input_shapes[2])
         input_covar_shape = (input_shapes[3],)
@@ -175,7 +174,6 @@ class ModelBiRnn(nn.Module):
             covar = torch.Tensor([[]])
         x = torch.squeeze(x, dim=1)
         x = 2 * (x - 0.5)
-
         x = self.embed(x)
         if self.split:
             pep = x[:, self.x_len:, :]
@@ -224,19 +222,28 @@ class ModelBiRnn(nn.Module):
         """
         # just the above method with the linear layers removed
         # do this in function to avoid always passing the same object
+        # do this in function to avoid always passing the same object
         if covar is None:
             covar = torch.Tensor([[]])
         x = torch.squeeze(x, dim=1)
         x = 2 * (x - 0.5)
-
         x = self.embed(x)
-
         if self.split:
             pep = x[:, self.x_len:, :]
             x = x[:, :self.x_len, :]  # TCR sequence from here on.
         for layer in self.bi_layers:
-            x = layer(x)
+            # Check if the layer is LSTM or GRU
+            if isinstance(layer, nn.LSTM):
+                lstm_output = layer(x)
+                output, (h_n, c_n) = lstm_output
+            elif isinstance(layer, nn.GRU):
+                gru_output = layer(x)
+                output, h_n = gru_output
 
+            # Use the output at the last time step for both directions
+            x = output[:, -1, :]
+        if len(x.size()) > 2:
+            x = x[:, -1, :]
         for layer in self.bi_peptide_layers:
             pep = layer(pep)
 
@@ -244,7 +251,6 @@ class ModelBiRnn(nn.Module):
             x = torch.cat([x, pep], axis=1)
         
         # Optional concatenation of non-sequence covariates.
-        # if covar.shape[1] > 0:
         if covar is not None and covar.shape[1] > 0:
             x = torch.cat([x, covar], axis=1)
 
@@ -572,10 +578,8 @@ class ModelConv(nn.Module):
         x = 2 * (x - 0.5)
         if hasattr(self, 'embed') and self.embed is not None:
             x = self.embed(x)
-        print('input conv', x.shape)
         for i, convolve in enumerate(self.conv_layers):
             x = convolve(x)
-        print('output conv', x.shape)
         x = torch.reshape(x, (-1, x.shape[1] * x.shape[2]))
         if covar.shape[1] > 0:
             x = torch.concat([x, covar], axis=1)
