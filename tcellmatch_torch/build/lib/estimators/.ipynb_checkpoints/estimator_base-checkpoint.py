@@ -1228,9 +1228,6 @@ class EstimatorBase:
             cdr3_seqs=cdr3_seqs
         )
 
-        self.x_train = self.x_train[:,np.newaxis,:]
-
-
     def _read_binarized_matrix_v3_0(
             self,
             fn: str,
@@ -1260,22 +1257,11 @@ class EstimatorBase:
             - y: np.ndarray of numeric lables of cells [observations, lable dimension]
             - nc: np.ndarray negative control table
         """
-
-        # !! Red Box fix #1
-        # # Read files.
+        # Read files.
         cell_table = pd.read_csv(fn, sep=sep, header=0)
-        # covariates_table = pd.DataFrame(index=cell_table[id_col])
-        # for x in cell_table.columns:
-        #     covariates_table[x] = cell_table[x].values
-        # if fns_clonotype is not None:
-        #     clonotype_table = pd.read_csv(fn, sep=",", header=0)
-        # else:
-        #     clonotype_table = None
-
-        # Copy cell_table to covariates_table and set the index
-        covariates_table = cell_table.copy()
-        covariates_table.set_index(id_col, inplace=True)
-
+        covariates_table = pd.DataFrame(index=cell_table[id_col])
+        for x in cell_table.columns:
+            covariates_table[x] = cell_table[x].values
         if fns_clonotype is not None:
             clonotype_table = pd.read_csv(fn, sep=",", header=0)
         else:
@@ -1371,31 +1357,17 @@ class EstimatorBase:
                 x_new = "_".join(x_new.split(")"))
             return x_new
 
-        # !! Red box fix #2
         table_temp = table.copy()
-
-        # if rename_covariates_for_patsy:
-        #     for x in table_temp.columns:
-        #         new_id = strip_string(x)
-        #         table_temp[new_id] = table_temp[x].values
-        #     for i, x in enumerate(formula_categ):
-        #         new_id = strip_string(x)
-        #         formula_categ[i] = new_id
-        #     for i, x in enumerate(formula_numeric):
-        #         new_id = strip_string(x)
-        #         formula_numeric[i] = new_id
-
-        # Function to strip and rename columns
-        def rename_columns(col_name):
-            return strip_string(col_name)
-
         if rename_covariates_for_patsy:
-            # Rename columns
-            table_temp.rename(columns=rename_columns, inplace=True)
-            
-            # Rename elements in formula_categ and formula_numeric lists
-            formula_categ = [strip_string(x) for x in formula_categ]
-            formula_numeric = [strip_string(x) for x in formula_numeric]
+            for x in table_temp.columns:
+                new_id = strip_string(x)
+                table_temp[new_id] = table_temp[x].values
+            for i, x in enumerate(formula_categ):
+                new_id = strip_string(x)
+                formula_categ[i] = new_id
+            for i, x in enumerate(formula_numeric):
+                new_id = strip_string(x)
+                formula_numeric[i] = new_id
 
         # Process table data types.
         if formula_categ != "":

@@ -11,6 +11,8 @@ __pycache__/
 tcellmatch.egg-info/
 tcellmatch.egg-info/*
 venv/
+wandb/
+tutorial_data/
 tutorials/.ipynb_checkpoints/
 tutorials/saved_model
 tcell-env/bin
@@ -60,3 +62,6 @@ back at it foos.ipynb
 embeddings_labels_df.csv
 ffn_continuous_blosum.npz
 training_runs
+hparam sweep.ipynb
+wandb
+tcell-env

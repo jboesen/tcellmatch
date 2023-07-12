@@ -24,7 +24,6 @@ class TestEstimatorFfn(unittest.TestCase):
 
         self.ffn.build_bilstm(
             topology = [10, 10],
-            residual_connection=True,
             aa_embedding_dim=0,
             optimizer='adam',
             lr=0.001,

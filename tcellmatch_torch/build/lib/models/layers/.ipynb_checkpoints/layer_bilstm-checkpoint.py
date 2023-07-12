@@ -1,8 +1,5 @@
 import torch.nn as nn
 
-class biGRU(nn.Module):
-import torch.nn as nn
-
 class BiLSTM(nn.Module):
     def __init__(
         self,
@@ -10,18 +7,20 @@ class BiLSTM(nn.Module):
         hidden_dim: int, dropout: int = 0,
         return_sequences: bool = True
     ):
-        super(BiGRU, self).__init__()
+        super(BiLSTM, self).__init__()
         self.return_sequences = return_sequences
-        self.gru = nn.GRU(
+        self.lstm = nn.LSTM(
             input_dim,
-            w,
+            hidden_dim,
             num_layers=1,
+            bias=True,
+            batch_first=True,
             dropout=dropout,
             bidirectional=True
         )
 
     def forward(self, x):
-        x, _ = self.gru(x)
+        x, _ = self.lstm(x)
         if not self.return_sequences:
             x = x[:, -1, :]  # Select only the output for the last time step
         return x
