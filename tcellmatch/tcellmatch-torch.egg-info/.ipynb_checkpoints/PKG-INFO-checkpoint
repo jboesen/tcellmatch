@@ -1,0 +1,10 @@
+Metadata-Version: 2.1
+Name: tcellmatch_torch
+Version: 0.1.0
+Summary: Predicting T-cell to epitope specificity.
+Author: theislab
+Author-email: david.fischer@helmholtz-muenchen.de
+Description-Content-Type: text/markdown
+Provides-Extra: tensorflow_cpu
+Provides-Extra: tensorflow_gpu
+Provides-Extra: docs

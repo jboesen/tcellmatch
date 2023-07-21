@@ -8,7 +8,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name='tcellmatch_torch',
+    name='tcellmatch-torch',
     author=author,
     author_email=author_email,
     description=description,
