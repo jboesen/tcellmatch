@@ -63,7 +63,6 @@ class ModelBiRnn(nn.Module):
             "dropout": dropout,
             "split": split,
         }
-        # Attention!!! output dim of biLSTM is two times of the dim of LSTM TODO this is not accounted for yet.
         # return_sequences=False means we only return the state of last cell in LSTM
         self.labels_dim = labels_dim
         self.input_shapes = input_shapes
@@ -163,11 +162,11 @@ class ModelBiRnn(nn.Module):
                 self.linear_layers.append(nn.Softmax(dim=1))
 
     def forward(
-        self,
-        x : torch.Tensor,
-        covar: torch.Tensor | None = None,
-        save_embeddings: bool = False,
-        fn: str = 'bilstm_embeddings',
+            self,
+            x : torch.Tensor,
+            covar: torch.Tensor | None = None,
+            save_embeddings: bool = False,
+            fn: str = 'bilstm_embeddings',
         ):
         # do this in function to avoid always passing the same object
         if covar is None:

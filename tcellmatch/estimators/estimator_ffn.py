@@ -22,7 +22,7 @@ from sklearn.model_selection import train_test_split
 from tcellmatch.models.models_ffn import ModelBiRnn, ModelSa, ModelConv, ModelLinear, ModelNoseq
 from tcellmatch.models.model_inception import ModelInception
 from tcellmatch.estimators.additional_metrics import pr_global, pr_label, auc_global, auc_label, \
-    deviation_global, deviation_label
+deviation_global, deviation_label
 from tcellmatch.estimators.estimator_base import EstimatorBase
 from tcellmatch.estimators.losses import WeightedBinaryCrossEntropy, MMD
 from tcellmatch.estimators.metrics import custom_r2, custom_logr2
@@ -120,7 +120,8 @@ class EstimatorFfn(EstimatorBase):
             optimize_for_gpu: bool = True,
             dtype: str = "float32",
             use_covariates: bool = True,
-            one_hot_y: bool = False
+            one_hot_y: bool = False,
+            labels_dim: int | None = None,
     ):
         """ Build a BiLSTM-based feed-forward model to use in the estimator.
 
@@ -164,7 +165,8 @@ class EstimatorFfn(EstimatorBase):
             optimize_for_gpu=optimize_for_gpu,
             dtype=dtype,
             use_covariates=use_covariates,
-            one_hot_y=one_hot_y
+            one_hot_y=one_hot_y,
+            labels_dim=labels_dim
         )
 
     def build_bigru(
@@ -347,7 +349,6 @@ class EstimatorFfn(EstimatorBase):
             return nn.BCEWithLogitsLoss(pos_weight=torch.full([1], label_smoothing))
         if label_smoothing and (loss == "categorical_crossentropy" or loss == "cce"):
             return nn.CrossEntropyLoss(weight=torch.full([1], label_smoothing))
-
         # no label smoothing
         if loss.lower() == "mmd":
             return MMD
@@ -364,7 +365,7 @@ class EstimatorFfn(EstimatorBase):
         else:
             raise ValueError("Invalid loss name: " + loss)
         return None
-    
+
     def _get_optimizer(self, optimizer: str):
         """
         :param optimizer: optimizer name
@@ -437,6 +438,7 @@ class EstimatorFfn(EstimatorBase):
         :param dtype:
         :return:
         """
+        
         if not input_shapes:
             input_shapes = (
                 self.x_train.shape[1],
@@ -628,7 +630,7 @@ class EstimatorFfn(EstimatorBase):
         :param n_filters_out:
         :param n_filters_final:
         :param n_hidden:
-         :param residual_connection: apply residual connection or not.
+            :param residual_connection: apply residual connection or not.
         :param aa_embedding_dim: Dimension of the linear amino acid embedding, ie number of 1x1 convolutional filters.
             This is set to the input dimension if aa_embedding_dim==0.
         :param depth_final_dense: Number of final densely connected layers. They all have labels_dim number of units
@@ -865,7 +867,7 @@ class EstimatorFfn(EstimatorBase):
         
         :return: None
         """
-
+        print('started training...')
         # Set up optimizer and learning rate scheduler
         optimizer = self.optimizer
         # lr_scheduler = ReduceLROnPlateau(optimizer,
@@ -884,14 +886,14 @@ class EstimatorFfn(EstimatorBase):
         writer = None
         if log_dir is not None:
             writer = SummaryWriter(log_dir=log_dir)
-
+        print('pre partition')
         if use_existing_eval_partition:
             if not self.idx_train_val or not self.idx_train or not self.idx_val:
                 raise ValueError("ERROR: use_existing_eval_partition is True, but no eval partition exists")
             idx_val = np.array([self.idx_train_val.tolist().index(x)
                                 for x in self.idx_train_val if x in self.idx_val])
             idx_train = np.array([self.idx_train_val.tolist().index(x)
-                                  for x in self.idx_train_val if x in self.idx_train])
+                                    for x in self.idx_train_val if x in self.idx_train])
         else:
             # Split training data into training and evaluation.
             # Perform this splitting based on clonotypes.
@@ -921,8 +923,9 @@ class EstimatorFfn(EstimatorBase):
         print("Number of observations in evaluation data: %i" % len(idx_val))
 
         print("Number of observations in training data: %i" % len(idx_train)) 
+        print('post partition partition')
 
-        np.save('/Users/johnboesen/Documents/Code/#Work/tcellmatch/tests/x_train.npy', self.x_train[idx_train])
+        # np.save('/Users/johnboesen/Documents/Code/#Work/tcellmatch/tests/x_train.npy', self.x_train[idx_train])
         # np is in float64, but model is in float32
         train_data = TensorDataset(
             torch.from_numpy(self.x_train[idx_train]).to(torch.float32),
@@ -935,8 +938,8 @@ class EstimatorFfn(EstimatorBase):
             torch.from_numpy(self.y_train[idx_val]).to(torch.float32)
             )
 
-        train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True,
-                                  generator=torch.Generator(device=self.device))
+        train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True,)
+                                    # generator=torch.Generator(device=self.device))
         # self.train_loader = train_loader
         val_loader = DataLoader(dataset=val_data, batch_size=validation_batch_size, shuffle=True)
         val_loss_list = []
@@ -944,20 +947,23 @@ class EstimatorFfn(EstimatorBase):
         num_classes = self.y_train.shape[-1]
         antigen_loss = np.zeros((epochs, num_classes))
         antigen_loss_val = np.zeros((epochs, num_classes))
+        self.model = self.model.to(self.device)
+        print('loaded up data')
         for epoch in range(epochs):
             # Training phase
             self.model.train()
             running_loss = 0.0
             # we enumerate through covariates, but only use them if use_covariates
+            print('At beginning of epoch...')
             for k, (x, covariates, y) in enumerate(train_loader):
                 x, covariates, y = x.to(self.device), covariates.to(self.device), y.to(self.device)
 
                 optimizer.zero_grad()
                 outputs = self.model(x, covariates) if use_covariates else self.model(x)
 
-                if k == len(train_loader) - 1 and epoch == epochs - 1:
-                    np.save('/Users/johnboesen/Documents/Code/#Work/tcellmatch/tests/in_fn_x.npy', x.detach().cpu().numpy())
-                    np.save('/Users/johnboesen/Documents/Code/#Work/tcellmatch/tests/in_fn_outputs.npy', outputs.detach().cpu().numpy())
+                # if k == len(train_loader) - 1 and epoch == epochs - 1:
+                #     np.save('/Users/johnboesen/Documents/Code/#Work/tcellmatch/tests/in_fn_x.npy', x.detach().cpu().numpy())
+                #     np.save('/Users/johnboesen/Documents/Code/#Work/tcellmatch/tests/in_fn_outputs.npy', outputs.detach().cpu().numpy())
 
                 loss = self.criterion(outputs, y)
                 # if save_antigen_loss:
@@ -970,10 +976,10 @@ class EstimatorFfn(EstimatorBase):
                 train_loss = loss.item()
                 if print_loss:
                     print(train_loss)
-                if use_wandb:
-                    wandb.log({"epoch": epoch, "sum/loss":train_loss, "avg_norm": self._average_norm()},
-                              step=k + epoch * len(train_loader))
-                train_loss_list.append(train_loss)
+            if use_wandb:
+                wandb.log({"epoch": epoch, "sum/loss":running_loss/len(train_loader), "avg_norm": self._average_norm()},)
+                            # step=k + epoch * len(train_loader))
+            train_loss_list.append(train_loss)
 
             # Validation phase
             self.model.eval()
@@ -1004,7 +1010,7 @@ class EstimatorFfn(EstimatorBase):
                 # else:
                 #     antigen_dict = {}
                 wandb.log({"epoch": epoch, "sum/train_loss":all_train_loss, "sum/val_loss":val_loss,
-                           **antigen_dict, **antigen_dict_val})
+                            **antigen_dict, **antigen_dict_val})
                 
             # Write to tensorboard
             if writer is not None:
@@ -1024,7 +1030,7 @@ class EstimatorFfn(EstimatorBase):
         # TODO (maybe): add more capabilties to this writer...
         if writer is not None:
             writer.close()
-    
+
         return (train_loss_list, val_loss_list,) + (
             antigen_loss/ len(train_loader.dataset), antigen_loss_val/ len(val_loader.dataset),)
 
@@ -1362,7 +1368,7 @@ class EstimatorFfn(EstimatorBase):
                 all_outputs.append(outputs.cpu().numpy())  # Transfer outputs back to CPU and convert to numpy array
 
         return np.concatenate(all_outputs)
-    
+
     def plot_residuals(self, target_ids : List | None = None, antigen_idx: int = 0):
         """
         Plot a histogram of residuals for a specific antigen.
@@ -1393,7 +1399,7 @@ class EstimatorFfn(EstimatorBase):
 
         # Show the plot
         plt.show()
-    
+
     def compare_preds(self, target_ids : List | None = None, antigen_idx : int = 0):
         """
         Plot a comparison between true binding and predicted binding.
@@ -1457,7 +1463,7 @@ class EstimatorFfn(EstimatorBase):
         if flavour == "10x_cd8_v1":
             if self.model_hyperparam["loss"] not in ["mse", "msle", "poisson"]:
                 raise ValueError("Do not use transform_predictions with flavour=='10x_cd8_v1' on a model fit "
-                                 "with a loss that is not mse, msle or poisson.")
+                                    "with a loss that is not mse, msle or poisson.")
 
             if nc.shape[1] == 0:
                 raise ValueError("Negative controls were not set, supply these during data reading.")
@@ -1508,7 +1514,7 @@ class EstimatorFfn(EstimatorBase):
         if flavour == "10x_cd8_v1":
             if self.model_hyperparam["loss"] not in ["mse", "msle", "poisson"]:
                 raise ValueError("Do not use transform_predictions with flavour=='10x_cd8_v1' on a model fit "
-                                 "with a loss that is not mse, msle or poisson.")
+                                    "with a loss that is not mse, msle or poisson.")
 
             if self.nc_test.shape[1] == 0:
                 raise ValueError("Negative controls were not set, supply these during data reading.")
@@ -1646,7 +1652,7 @@ class EstimatorFfn(EstimatorBase):
         :param fn_data: Path and file name prefix to read all fitting relevant data objects from.
         :param fn_model: Path and file name prefix to read model weights from.
         :param log_dir: Directory to save tensorboard callback to. Disabled if None. This is given to allow the user
-             to choose between a new logging directory and the directory from the saved settings.
+                to choose between a new logging directory and the directory from the saved settings.
 
                 - None if you want to enforce no logging.
                 - "previous" if you want to use the directory saved in the settings.
