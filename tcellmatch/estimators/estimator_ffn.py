@@ -6,29 +6,25 @@
 # above disables line too long, docstring, can't find function, module too long
 import os
 import pickle
-from typing import Union, List
+from typing import List, Tuple, Union
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.sparse
 import torch
 import torch.nn as nn
-import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader, TensorDataset
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.nn import functional as F
-from torch.utils.tensorboard import SummaryWriter
-from sklearn.model_selection import train_test_split
-
-from tcellmatch.models.models_ffn import ModelBiRnn, ModelSa, ModelConv, ModelLinear, ModelNoseq
-from tcellmatch.models.model_inception import ModelInception
-from tcellmatch.estimators.additional_metrics import pr_global, pr_label, auc_global, auc_label, \
-deviation_global, deviation_label
-from tcellmatch.estimators.estimator_base import EstimatorBase
-from tcellmatch.estimators.losses import WeightedBinaryCrossEntropy, MMD
-from tcellmatch.estimators.metrics import custom_r2, custom_logr2
 import wandb
-
-from typing import List, Tuple
+from tcellmatch.estimators.additional_metrics import (auc_global, auc_label,
+                                                      deviation_global,
+                                                      deviation_label,
+                                                      pr_global, pr_label)
+from tcellmatch.estimators.estimator_base import EstimatorBase
+from tcellmatch.models.model_inception import ModelInception
+from tcellmatch.models.models_ffn import (ModelBiRnn, ModelConv, ModelLinear,
+                                          ModelNoseq, ModelSa)
+from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.tensorboard import SummaryWriter
 
 
 class EstimatorFfn(EstimatorBase):
@@ -844,7 +840,7 @@ class EstimatorFfn(EstimatorBase):
         allow_early_stopping: bool = False,
         # save_antigen_loss: bool = False,
         print_loss: bool = False,
-        use_wandb: bool = True
+        use_wandb: bool = True,
     ) -> Tuple[List[float], List[float]]:
         """
         Trains the model based on the given training parameters and data.
@@ -887,7 +883,7 @@ class EstimatorFfn(EstimatorBase):
             writer = SummaryWriter(log_dir=log_dir)
 
         if use_existing_eval_partition:
-            if not self.idx_train_val or not self.idx_train or not self.idx_val:
+            if self.idx_train_val is None or self.idx_train is None or self.idx_val is None:
                 raise ValueError("ERROR: use_existing_eval_partition is True, but no eval partition exists")
             idx_val = np.array([self.idx_train_val.tolist().index(x)
                                 for x in self.idx_train_val if x in self.idx_val])
@@ -939,7 +935,9 @@ class EstimatorFfn(EstimatorBase):
         train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True,)
                                     # generator=torch.Generator(device=self.device))
         # self.train_loader = train_loader
-        val_loader = DataLoader(dataset=val_data, batch_size=validation_batch_size, shuffle=True)
+        val_loader = DataLoader(dataset=val_data, batch_size=validation_batch_size, shuffle=True,
+                                generator=torch.Generator(device=self.device))
+        val_criterion = self.val_criterion or self.criterion
         val_loss_list = []
         train_loss_list = []
         num_classes = self.y_train.shape[-1]
@@ -986,7 +984,7 @@ class EstimatorFfn(EstimatorBase):
 
                     outputs = self.model(x, covariates) if use_covariates else self.model(x)
                     for i in range(num_classes):
-                        antigen_loss_val[epoch, i] += self.criterion(outputs[:,i],  y[:,i]).item() * x.size(0)
+                        antigen_loss_val[epoch, i] += val_criterion(outputs[:,i],  y[:,i]).item() * x.size(0)
                     
             # Calculate average losses
             all_train_loss = running_loss / len(train_loader.dataset)
@@ -1010,8 +1008,11 @@ class EstimatorFfn(EstimatorBase):
                 
             # Write to tensorboard
             if writer is not None:
-                writer.add_scalar('Train/Loss', train_loss, epoch)
-                writer.add_scalar('Val/Loss', val_loss, epoch)
+                writer.add_scalars('Loss', {
+                    'Train': train_loss, 'Val': val_loss
+                }, epoch)
+                # writer.add_scalar('Loss/Train', train_loss, epoch)
+                # writer.add_scalar('Loss/Val', val_loss, epoch)
 
             # Check for early stopping
             if val_loss < best_val_loss:
@@ -1315,7 +1316,7 @@ class EstimatorFfn(EstimatorBase):
 
         # Create a DataLoader for the test data
         test_data = TensorDataset(torch.from_numpy(self.x_test), torch.from_numpy(self.covariates_test))
-        test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=True)
+        test_loader = DataLoader(test_data, batch_size=batch_size)
         self.test_loader = test_loader
         all_outputs = []
 
@@ -1346,7 +1347,7 @@ class EstimatorFfn(EstimatorBase):
 
         # Create a DataLoader for the test data
         data = TensorDataset(x.to(torch.float32), covar.to(torch.float32))
-        loader = DataLoader(data, batch_size=batch_size, shuffle=True)
+        loader = DataLoader(data, batch_size=batch_size)
         all_outputs = []
 
         use_covariates = self.model.has_covariates if hasattr(self.model, 'has_covariates') else True
