@@ -965,13 +965,12 @@ class EstimatorFfn(EstimatorBase):
                 # if save_antigen_loss:
                 for i in range(num_classes):
                     antigen_loss[epoch, i]+=self.criterion(outputs[:,i],  y[:,i]).item() * x.size(0)
-                
                 loss.backward()
                 optimizer.step()
                 running_loss += loss.item()
                 train_loss = loss.item()
-                if print_loss:
-                    print(train_loss)
+            if print_loss:
+                print(f'Epoch {epoch}, loss: {round(running_loss/len(train_loader), 2)}')
             if use_wandb:
                 wandb.log({"epoch": epoch, "sum/loss":running_loss/len(train_loader), "avg_norm": self._average_norm()},)
                             # step=k + epoch * len(train_loader))
@@ -1768,7 +1767,6 @@ class EstimatorFfn(EstimatorBase):
                 label_smoothing=self.model_hyperparam["label_smoothing"],
                 input_shapes=self.model_hyperparam["input_shapes"],
                 labels_dim=self.model_hyperparam["labels_dim"],
-                use_covariates=self.model_hyperparam["use_covariates"]
             )
         elif self.model_hyperparam["model"].lower() in ["conv", "convolutional"]:
             self.build_conv(
