@@ -935,10 +935,11 @@ class EstimatorFfn(EstimatorBase):
             torch.from_numpy(self.covariates_train[idx_val]).to(torch.float32),
             torch.from_numpy(self.y_train[idx_val]).to(torch.float32)
             )
+        self.val_data = val_data
 
         train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True,)
                                     # generator=torch.Generator(device=self.device))
-        # self.train_loader = train_loader
+        self.train_loader = train_loader
         val_loader = DataLoader(dataset=val_data, batch_size=validation_batch_size, shuffle=True)
         val_loss_list = []
         train_loss_list = []
@@ -1686,11 +1687,11 @@ class EstimatorFfn(EstimatorBase):
         if not fn_settings or not fn_model:
             self.load_model_settings(fn=f'{fn}/args')
             self.initialise_model_from_settings()
-            self.model.load_state_dict(torch.load(f'{fn}/model'))  # Load the saved state dictionary
+            self.model.load_state_dict(torch.load(f'{fn}/model'), strict=False)  # Load the saved state dictionary
         else:
             self.load_model_settings(fn=fn_settings)
             self.initialise_model_from_settings()
-            self.model.load_state_dict(torch.load(fn_model))  # Load the saved state dictionary
+            self.model.load_state_dict(torch.load(fn_model), strict=False)  # Load the saved state dictionary
         
 
     def save_estimator_args(
