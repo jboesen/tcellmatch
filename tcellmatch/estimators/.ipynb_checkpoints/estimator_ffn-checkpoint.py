@@ -869,11 +869,11 @@ class EstimatorFfn(EstimatorBase):
         print('started training...')
         # Set up optimizer and learning rate scheduler
         optimizer = self.optimizer
-        # lr_scheduler = ReduceLROnPlateau(optimizer,
-        #                                   mode='min',
-        #                                   factor=lr_schedule_factor,
-        #                                   patience=lr_schedule_patience,
-        #                                   min_lr=lr_schedule_min_lr)
+        lr_scheduler = ReduceLROnPlateau(optimizer,
+                                          mode='min',
+                                          factor=lr_schedule_factor,
+                                          patience=lr_schedule_patience,
+                                          min_lr=lr_schedule_min_lr)
 
         # Early stopping initialization
         early_stopping_counter = 0
@@ -935,12 +935,11 @@ class EstimatorFfn(EstimatorBase):
             torch.from_numpy(self.covariates_train[idx_val]).to(torch.float32),
             torch.from_numpy(self.y_train[idx_val]).to(torch.float32)
             )
-        self.val_data = val_data
 
         train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True,)
                                     # generator=torch.Generator(device=self.device))
-        self.train_loader = train_loader
-        val_loader = DataLoader(dataset=val_data, batch_size=validation_batch_size, shuffle=True)
+        # self.train_loader = train_loader
+        val_loader = DataLoader(dataset=val_data, batch_size=validation_batch_size, shuffle=False)
         val_loss_list = []
         train_loss_list = []
         num_classes = self.y_train.shape[-1]
@@ -994,7 +993,7 @@ class EstimatorFfn(EstimatorBase):
             val_loss_list.append(val_loss)
 
             # Update learning rate
-            # lr_scheduler.step(val_loss)
+            lr_scheduler.step(val_loss)
 
             # Write to WandB
             if use_wandb:
@@ -1315,7 +1314,7 @@ class EstimatorFfn(EstimatorBase):
 
         # Create a DataLoader for the test data
         test_data = TensorDataset(torch.from_numpy(self.x_test), torch.from_numpy(self.covariates_test))
-        test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=True)
+        test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
         self.test_loader = test_loader
         all_outputs = []
 
@@ -1687,11 +1686,11 @@ class EstimatorFfn(EstimatorBase):
         if not fn_settings or not fn_model:
             self.load_model_settings(fn=f'{fn}/args')
             self.initialise_model_from_settings()
-            self.model.load_state_dict(torch.load(f'{fn}/model'), strict=False)  # Load the saved state dictionary
+            self.model.load_state_dict(torch.load(f'{fn}/model'))  # Load the saved state dictionary
         else:
             self.load_model_settings(fn=fn_settings)
             self.initialise_model_from_settings()
-            self.model.load_state_dict(torch.load(fn_model), strict=False)  # Load the saved state dictionary
+            self.model.load_state_dict(torch.load(fn_model))  # Load the saved state dictionary
         
 
     def save_estimator_args(
