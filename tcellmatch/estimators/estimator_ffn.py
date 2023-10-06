@@ -932,8 +932,8 @@ class EstimatorFfn(EstimatorBase):
             torch.from_numpy(self.y_train[idx_val]).to(torch.float32)
             )
 
-        train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True,)
-                                    # generator=torch.Generator(device=self.device))
+        train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True,
+                                    generator=torch.Generator(device=self.device))
         # self.train_loader = train_loader
         val_loader = DataLoader(dataset=val_data, batch_size=validation_batch_size, shuffle=True,
                                 generator=torch.Generator(device=self.device))
